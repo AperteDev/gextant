@@ -1,0 +1,18 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.PreferencesDialog dialog {
+  title: "Preferences";
+
+  Adw.PreferencesPage {
+    Adw.PreferencesGroup {
+      title: "GitHub";
+      description: "A personal access token raises GitHub's rate limit from 60 to 5,000 requests an hour and lets Gextant see your private repositories. It needs no permissions for public ones. It is kept in your keyring.";
+
+      Adw.PasswordEntryRow token_row {
+        title: "Access Token";
+        show-apply-button: true;
+      }
+    }
+  }
+}

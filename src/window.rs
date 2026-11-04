@@ -3,6 +3,7 @@
 
 use crate::extensions::{self, Extension};
 use crate::upstream::{self, Outcome, Version};
+use crate::{preferences, token};
 use adw::prelude::*;
 use gtk::{gio, glib};
 use std::cell::Cell;
@@ -15,6 +16,16 @@ struct Checked {
     counter: Option<u64>,
     url: Option<String>,
     status: gtk::Label,
+}
+
+/// What checking needs: the rows, the button that waits for the checks and the banner for the
+/// rate limit.
+struct Checker {
+    rows: Vec<Checked>,
+    button: gtk::Button,
+    banner: adw::Banner,
+    /// Counts the runs: a result from an older one (the token changed meanwhile) is dropped.
+    run: Cell<u32>,
 }
 
 pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
@@ -66,14 +77,29 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
     let stack: gtk::Stack = object("stack").downcast().unwrap();
     stack.set_visible_child_name(if all.is_empty() { "empty" } else { "list" });
 
-    let checked = Rc::new(checked);
     let button: gtk::Button = object("refresh_button").downcast().unwrap();
     button.set_sensitive(!checked.is_empty());
-    button.connect_clicked({
-        let checked = checked.clone();
-        move |button| check_all(&checked, button)
+    let checker = Rc::new(Checker {
+        rows: checked,
+        button: button.clone(),
+        banner: object("banner").downcast().unwrap(),
+        run: Cell::new(0),
     });
-    check_all(&checked, &button);
+    button.connect_clicked({
+        let checker = checker.clone();
+        move |_| check_all(&checker)
+    });
+    let preferences = gio::ActionEntry::builder("preferences")
+        .activate({
+            let checker = checker.clone();
+            move |window: &adw::ApplicationWindow, _, _| {
+                let checker = checker.clone();
+                preferences::present(window, move || check_all(&checker));
+            }
+        })
+        .build();
+    window.add_action_entries([preferences]);
+    check_all(&checker);
     window
 }
 
@@ -99,20 +125,37 @@ fn version_label(e: &Extension) -> gtk::Label {
 }
 
 /// Check every user extension on its own thread; the button waits for the last.
-fn check_all(rows: &Rc<Vec<Checked>>, button: &gtk::Button) {
-    button.set_sensitive(false);
-    let pending = Rc::new(Cell::new(rows.len()));
-    for r in rows.iter() {
+fn check_all(checker: &Rc<Checker>) {
+    if checker.rows.is_empty() {
+        return;
+    }
+    let run = checker.run.get() + 1;
+    checker.run.set(run);
+    checker.button.set_sensitive(false);
+    checker.banner.set_revealed(false);
+    let token = token::load();
+    let pending = Rc::new(Cell::new(checker.rows.len()));
+    for r in &checker.rows {
         show(&r.status, "Checking…", "dim-label", None);
         let (uuid, version_name, url) = (r.uuid.clone(), r.version_name.clone(), r.url.clone());
-        let counter = r.counter;
-        let (status, button, pending) = (r.status.clone(), button.clone(), pending.clone());
+        let (counter, token) = (r.counter, token.clone());
+        let (status, checker, pending) = (r.status.clone(), checker.clone(), pending.clone());
         glib::spawn_future_local(async move {
+            let have_token = token.is_some();
             let outcome = gio::spawn_blocking(move || {
-                upstream::check(&uuid, version_name.as_deref(), counter, url.as_deref())
+                upstream::check(
+                    &uuid,
+                    version_name.as_deref(),
+                    counter,
+                    url.as_deref(),
+                    token.as_deref(),
+                )
             })
             .await
             .unwrap_or_else(|_| Outcome::Failed("The check crashed".into()));
+            if checker.run.get() != run {
+                return;
+            }
             match outcome {
                 Outcome::Checked {
                     latest,
@@ -140,11 +183,20 @@ fn check_all(rows: &Rc<Vec<Checked>>, button: &gtk::Button) {
                 ),
                 Outcome::NoRepo => show(&status, "No repository found", "dim-label", None),
                 Outcome::NoRelease => show(&status, "No releases", "dim-label", None),
+                Outcome::RateLimited => {
+                    show(&status, "Rate limit reached", "warning", None);
+                    checker.banner.set_title(if have_token {
+                        "GitHub's rate limit is used up. Try again later."
+                    } else {
+                        "GitHub's rate limit is used up. An access token raises it."
+                    });
+                    checker.banner.set_revealed(true);
+                }
                 Outcome::Failed(e) => show(&status, "Check failed", "error", Some(&e)),
             }
             pending.set(pending.get() - 1);
             if pending.get() == 0 {
-                button.set_sensitive(true);
+                checker.button.set_sensitive(true);
             }
         });
     }

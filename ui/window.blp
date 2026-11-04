@@ -14,6 +14,19 @@ Adw.ApplicationWindow window {
         icon-name: "view-refresh-symbolic";
         tooltip-text: "Check for Updates";
       }
+
+      [end]
+      Gtk.MenuButton {
+        icon-name: "open-menu-symbolic";
+        primary: true;
+        menu-model: primary_menu;
+      }
+    }
+
+    [top]
+    Adw.Banner banner {
+      button-label: "Preferences";
+      action-name: "win.preferences";
     }
 
     content: Gtk.Stack stack {
@@ -42,4 +55,16 @@ Adw.ApplicationWindow window {
       }
     };
   };
+}
+
+menu primary_menu {
+  item {
+    label: "Preferences";
+    action: "win.preferences";
+  }
+
+  item {
+    label: "Quit";
+    action: "app.quit";
+  }
 }

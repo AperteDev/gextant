@@ -14,8 +14,15 @@ fn main() {
     let out = std::env::var("OUT_DIR").unwrap();
     println!("cargo::rerun-if-changed=ui");
     println!("cargo::rerun-if-changed=data");
+    let blueprints: Vec<_> = std::fs::read_dir("ui")
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|x| x == "blp"))
+        .collect();
     run(
-        Command::new("blueprint-compiler").args(["batch-compile", &out, "ui", "ui/window.blp"]),
+        Command::new("blueprint-compiler")
+            .args(["batch-compile", &out, "ui"])
+            .args(&blueprints),
         "blueprint-compiler",
     );
     run(

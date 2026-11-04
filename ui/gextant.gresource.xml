@@ -2,6 +2,7 @@
 <gresources>
   <gresource prefix="/dev/aperte/Gextant">
     <file>window.ui</file>
+    <file>preferences.ui</file>
   </gresource>
   <gresource prefix="/dev/aperte/Gextant/icons/scalable/apps">
     <file>dev.aperte.Gextant.svg</file>

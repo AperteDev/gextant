@@ -60,8 +60,13 @@ source archive if its `metadata.json` is at the root (or in a single subfolder).
 (a repo that needs `make`, meson or npm to produce the extension) shows "no release to
 install"; Gextant does not run build scripts (see [Ruled out](#ruled-out)).
 
-Requests are not conditional yet; they should be (`ETag`), one per extension, to stay under
-GitHub's 60 requests an hour without a token.
+Checking spends no API quota: without an access token it reads github.com's pages
+(`/releases/latest` redirects to the tag; `tags.atom` for repos that only tag; the assets page
+for a guessed repository). With a token (Preferences, kept in the keyring) it uses the API
+(5,000 requests an hour, private repositories too). Downloads for updating should use
+`/releases/latest/download/<file>`, which costs no quota either. When even that is limited, a
+banner says so and opens Preferences. Still to do: remember what was found between runs
+(`ETag`, and the repos without releases), so a start does not ask again for all of them.
 
 ### Updating
 
@@ -132,7 +137,6 @@ Roughly in this order, each with its own plan when it comes:
   `org.gnome.Shell.Extensions` over D-Bus for the Shell version), AUR (`gextant`,
   `gextant-bin`, `gextant-git`), `.deb`; the desktop file, metainfo and icon come with them.
 - **Translations** (gettext, Polish first), as the sibling apps do; CI (fmt, clippy, tests).
-- A GitHub token in the keyring for the rate limit and private repositories.
 
 ## Open questions and risks
 
@@ -157,8 +161,10 @@ Roughly in this order, each with its own plan when it comes:
   nothing to check there yet.
 - **Wayland** cannot reload an extension: every update waits for a login. On X11 the Shell can
   reload (`Alt+F2`, `r`); not worth a code path for now.
-- **GitHub's rate limit** with many extensions: conditional requests are the plan; a token
-  (above) if it is not enough.
+- **GitHub's rate limit** on github.com's pages is not documented; the banner is there for when
+  it is hit. If it is hit often, remembering results between runs is the next step.
+- **The pages' markup** (the assets page, `tags.atom`) is not an API: it can change. The token
+  path does not depend on it.
 
 ## Ruled out
 
