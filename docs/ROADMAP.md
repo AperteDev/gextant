@@ -60,12 +60,13 @@ source archive if its `metadata.json` is at the root (or in a single subfolder).
 (a repo that needs `make`, meson or npm to produce the extension) shows "no release to
 install"; Gextant does not run build scripts (see [Ruled out](#ruled-out)).
 
-Checking spends no API quota: without an access token it reads github.com's pages
-(`/releases/latest` redirects to the tag; `tags.atom` for repos that only tag; the assets page
-for a guessed repository). With a token (Preferences, kept in the keyring) it uses the API
-(5,000 requests an hour, private repositories too). Downloads for updating should use
+Checking spends no API quota: it reads github.com's pages (`/releases/latest` redirects to the
+tag; `tags.atom` for repos that only tag; the assets page for a guessed repository). The API is
+the fallback, and only with an access token (Preferences, kept in the keyring): when the pages
+are limited or do not know the repository (a private one). Downloads for updating should use
 `/releases/latest/download/<file>`, which costs no quota either. When even that is limited, a
-banner says so and opens Preferences. Still to do: remember what was found between runs
+banner says so and opens Preferences. A 403 counts as a rate limit only when GitHub says so;
+otherwise its message is shown (a token that may not see a repository gets one). Still to do: remember what was found between runs
 (`ETag`, and the repos without releases), so a start does not ask again for all of them.
 
 ### Updating
@@ -163,8 +164,8 @@ Roughly in this order, each with its own plan when it comes:
   reload (`Alt+F2`, `r`); not worth a code path for now.
 - **GitHub's rate limit** on github.com's pages is not documented; the banner is there for when
   it is hit. If it is hit often, remembering results between runs is the next step.
-- **The pages' markup** (the assets page, `tags.atom`) is not an API: it can change. The token
-  path does not depend on it.
+- **The pages' markup** (the assets page, `tags.atom`) is not an API: it can change. The API
+  fallback does not depend on them.
 
 ## Ruled out
 

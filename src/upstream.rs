@@ -12,6 +12,7 @@ static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
         ureq::Agent::config_builder()
             .user_agent(concat!("gextant/", env!("CARGO_PKG_VERSION")))
             .timeout_global(Some(Duration::from_secs(20)))
+            .http_status_as_error(false)
             .tls_config(
                 TlsConfig::builder()
                     .root_certs(RootCerts::PlatformVerifier)
@@ -56,45 +57,65 @@ pub struct Release {
 pub enum Error {
     /// GitHub's limit on requests was used up.
     RateLimited,
+    /// github.com has no such repository for us: it does not exist, or it is private.
+    Missing,
     Other(String),
 }
 
 impl From<ureq::Error> for Error {
     fn from(e: ureq::Error) -> Self {
-        match e {
-            ureq::Error::StatusCode(403 | 429) => Error::RateLimited,
-            ureq::Error::StatusCode(401) => Error::Other("GitHub refused the access token".into()),
-            e => Error::Other(e.to_string()),
-        }
+        Error::Other(e.to_string())
     }
 }
 
-type Response = Result<ureq::http::Response<ureq::Body>, ureq::Error>;
+type Response = ureq::http::Response<ureq::Body>;
 
-/// The body of a response; `None` for 404.
-fn text(r: Response) -> Result<Option<String>, Error> {
-    match r {
-        Ok(mut r) => r
-            .body_mut()
-            .read_to_string()
-            .map(Some)
-            .map_err(|e| Error::Other(e.to_string())),
-        Err(ureq::Error::StatusCode(404)) => Ok(None),
-        Err(e) => Err(e.into()),
+/// The body of an answer; `None` for 404.
+fn read(mut r: Response) -> Result<Option<String>, Error> {
+    let status = r.status().as_u16();
+    let limited = r
+        .headers()
+        .get("x-ratelimit-remaining")
+        .is_some_and(|v| v == "0")
+        || r.headers().contains_key("retry-after");
+    let body = r
+        .body_mut()
+        .read_to_string()
+        .map_err(|e| Error::Other(e.to_string()))?;
+    match status {
+        200..=299 => Ok(Some(body)),
+        404 => Ok(None),
+        _ => Err(failure(status, limited, &body)),
     }
 }
 
-/// The latest release of `repo`. With a `token`, from the API (5,000 requests an hour, private
-/// repositories too); without, from github.com's pages, which the API's 60 an hour do not
-/// cover. `uuid` asks whether the release ships that extension.
+/// What a failed answer means. A 403 is a rate limit only when GitHub says so (its headers, or
+/// its message): it also answers 403 to a token that may not see a repository, and to a burst
+/// of requests (the secondary limit, which says so in its message).
+fn failure(status: u16, limited: bool, body: &str) -> Error {
+    if status == 401 {
+        return Error::Other("GitHub refused the access token".into());
+    }
+    if status == 429 || (status == 403 && (limited || body.to_lowercase().contains("rate limit"))) {
+        return Error::RateLimited;
+    }
+    let message = serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|v| v["message"].as_str().map(str::to_owned));
+    Error::Other(message.unwrap_or_else(|| format!("GitHub answered HTTP {status}")))
+}
+
+/// The latest release of `repo`, from github.com's pages, which cost no API quota. Only when
+/// they fail is the API asked, if there is a `token`: when the pages are limited, or do not
+/// know the repository (a private one). `uuid` asks whether the release ships that extension.
 pub fn latest(
     repo: &Repo,
     token: Option<&str>,
     uuid: Option<&str>,
 ) -> Result<Option<Release>, Error> {
-    match token {
-        Some(token) => latest_api(repo, token, uuid),
-        None => latest_web(repo, uuid),
+    match (latest_web(repo, uuid), token) {
+        (Err(Error::RateLimited | Error::Missing), Some(token)) => latest_api(repo, token, uuid),
+        (r, _) => r,
     }
 }
 
@@ -109,8 +130,8 @@ fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Rel
             ))
             .header("Accept", "application/vnd.github+json")
             .header("Authorization", format!("Bearer {token}"))
-            .call();
-        text(r)?
+            .call()?;
+        read(r)?
             .map(|t| serde_json::from_str(&t).map_err(|e| Error::Other(e.to_string())))
             .transpose()
     };
@@ -138,26 +159,28 @@ fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Rel
 /// `/releases` when there is none: then the tags feed names the newest tag).
 fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error> {
     let base = format!("https://github.com/{}/{}", repo.owner, repo.name);
-    let tag = match AGENT.head(format!("{base}/releases/latest")).call() {
-        Ok(r) => r
+    let r = AGENT.head(format!("{base}/releases/latest")).call()?;
+    let tag = match r.status().as_u16() {
+        200 => r
             .get_uri()
             .path()
             .rsplit_once("/releases/tag/")
             .map(|(_, t)| t.to_owned()),
-        Err(ureq::Error::StatusCode(404)) => return Ok(None),
-        Err(e) => return Err(e.into()),
+        404 => return Err(Error::Missing),
+        403 | 429 => return Err(Error::RateLimited),
+        s => return Err(Error::Other(format!("GitHub answered HTTP {s}"))),
     };
     let Some(tag) = tag else {
-        let feed = text(AGENT.get(format!("{base}/tags.atom")).call())?;
+        let feed = read(AGENT.get(format!("{base}/tags.atom")).call()?)?;
         let tag = feed.as_deref().and_then(first_tag);
         return Ok(tag.map(|tag| Release { tag, ships: false }));
     };
     let ships = match uuid {
         // The assets are listed on a page of their own, with `@` percent-encoded.
-        Some(u) => text(
+        Some(u) => read(
             AGENT
                 .get(format!("{base}/releases/expanded_assets/{tag}"))
-                .call(),
+                .call()?,
         )?
         .is_some_and(|html| {
             let dir = format!("/releases/download/{tag}/");
@@ -247,6 +270,7 @@ pub fn check(
     // (`gnome-extensions pack` makes `<uuid>.shell-extension.zip`).
     match latest(&repo, token, guessed.then_some(uuid)) {
         Err(Error::RateLimited) => Outcome::RateLimited,
+        Err(Error::Missing) => Outcome::NoRepo,
         Err(Error::Other(e)) => Outcome::Failed(e),
         Ok(None) => Outcome::NoRelease,
         Ok(Some(r)) if guessed && !r.ships => Outcome::NoRepo,
@@ -287,6 +311,34 @@ mod tests {
         assert_eq!(repo("https://nightthemeswitcher.romainvigier.fr"), None);
         assert_eq!(repo("https://github.com/aunetx"), None);
         assert_eq!(repo("not a url"), None);
+    }
+
+    #[test]
+    fn a_403_is_a_rate_limit_only_when_github_says_so() {
+        let msg = |e: Error| match e {
+            Error::Other(m) => m,
+            _ => "limited".into(),
+        };
+        let denied = r#"{"message":"Resource not accessible by personal access token"}"#;
+        assert_eq!(
+            msg(failure(403, false, denied)),
+            "Resource not accessible by personal access token"
+        );
+        assert_eq!(msg(failure(403, true, denied)), "limited");
+        assert_eq!(
+            msg(failure(
+                403,
+                false,
+                r#"{"message":"You have exceeded a secondary rate limit."}"#
+            )),
+            "limited"
+        );
+        assert_eq!(msg(failure(429, false, "")), "limited");
+        assert_eq!(
+            msg(failure(401, false, "")),
+            "GitHub refused the access token"
+        );
+        assert_eq!(msg(failure(500, false, "")), "GitHub answered HTTP 500");
     }
 
     #[test]
