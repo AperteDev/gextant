@@ -40,19 +40,22 @@ What real extensions look like (a Shell 51 install, 13 extensions):
 In this order, the first that holds:
 
 1. The repository the user set for this extension (**Set repository…**), kept by Gextant.
-2. `url` from `metadata.json`, reduced to the repository: `github.com/<owner>/<repo>`, without
-   `.git`, `/wiki`, `/tree/…` and the like.
-3. A project page on `<owner>.github.io/<repo>`: the candidate `github.com/<owner>/<repo>`.
-4. Planned: a project page on another domain (Night Theme Switcher's own site) is fetched and
-   searched for a link to a repository on a known forge; accepted by the rule below.
+2. `url` from `metadata.json`, reduced to the repository: `github.com/<owner>/<repo>`, or a
+   GitLab project (`gitlab.com`, or a host named `gitlab.…` such as `gitlab.gnome.org`, with
+   its subgroups), without `.git`, `/wiki`, `/-/…` and the like.
+3. A project page on `<owner>.github.io/<repo>` (or `.gitlab.io`): the candidate on that forge.
+4. A project page on another domain (Night Theme Switcher's own site) is fetched (https only,
+   the first megabyte) and the first three repositories it links to are the candidates.
 5. Otherwise: no upstream; the row asks for one.
 
-A guess (3) is accepted only if the latest release has a zip named after the extension's UUID
-(`gnome-extensions pack` names it `<uuid>.shell-extension.zip`). Still to do: the same check for
-a repository the user sets, by the downloaded zip's `metadata.json` (see Updating), and keeping
-the accepted repository, so a later release naming another `url` never moves it.
+A guess (3, 4) is accepted only if the latest release has a zip named after the extension: its
+UUID, or what is before the `@` (`gnome-extensions pack` names it `<uuid>.shell-extension.zip`;
+Night Theme Switcher ships `nightthemeswitcher.zip`). Still to do: the same check for a
+repository the user sets, by the downloaded zip's `metadata.json` (see Updating), and keeping
+the accepted repository, so a later release naming another `url` never moves it, and not
+fetching a project page again on every start.
 
-GitHub only in 0.1; the other forges are under [Later](#later).
+GitHub and GitLab in 0.1; Codeberg and Forgejo are under [Later](#later).
 
 ### What to install
 
@@ -127,9 +130,8 @@ Roughly in this order, each with its own plan when it comes:
   release notes of the update on offer, the installed and the backed-up version.
 - **Settings button**: opens the extension's preferences (`OpenExtensionPrefs`), as in the
   screenshot of the Extensions app; shown only for extensions that have some.
-- **Other forges**: GitLab (gitlab.com and self-hosted), Codeberg and Forgejo, with the same
-  checks (GitLab: `/-/releases/permalink/latest`, `/-/tags?format=atom`); later a plain git URL.
-  Night Theme Switcher needs it: its site links to GitLab, whose tags are EGO's numbers.
+- **More forges**: Codeberg and Forgejo, with the same checks; GitLab on a host not named
+  `gitlab.…`; later a plain git URL.
 - **Background checks**: a check without the window and a notification, for extensions in
   Check or Update mode (a user timer or the Background portal; to be planned together with
   autostart).

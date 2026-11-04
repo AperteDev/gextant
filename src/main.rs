@@ -1,6 +1,7 @@
 //! Gextant: updates GNOME Shell extensions straight from their upstream repositories.
 
 mod extensions;
+mod gitlab;
 mod preferences;
 mod token;
 mod upstream;

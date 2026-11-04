@@ -1,4 +1,4 @@
-//! An extension's upstream: the repository its `url` names (GitHub only for now), its latest
+//! An extension's upstream: the repository its `url` names (GitHub or GitLab), its latest
 //! release, and whether that is newer than what is installed.
 
 use serde_json::Value;
@@ -7,7 +7,7 @@ use std::time::Duration;
 use ureq::ResponseExt;
 use ureq::tls::{RootCerts, TlsConfig};
 
-static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
+pub(crate) static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
     ureq::Agent::new_with_config(
         ureq::Agent::config_builder()
             .user_agent(concat!("gextant/", env!("CARGO_PKG_VERSION")))
@@ -24,40 +24,106 @@ static AGENT: LazyLock<ureq::Agent> = LazyLock::new(|| {
 
 #[derive(Debug, PartialEq)]
 pub struct Repo {
-    pub owner: String,
-    pub name: String,
+    /// `github.com`, `gitlab.com`, or another host named `gitlab.…`.
+    pub host: String,
+    /// `owner/name` (on GitLab, with any subgroups in between).
+    pub path: String,
 }
 
 /// The repository `url` points at, and whether that is only a guess: a project page on
-/// `<owner>.github.io/<name>` is taken for `github.com/<owner>/<name>`.
+/// `<owner>.github.io/<name>` is taken for `github.com/<owner>/<name>` (and `.gitlab.io` for
+/// gitlab.com).
 pub fn repo_from_url(url: &str) -> Option<(Repo, bool)> {
-    let rest = url.split_once("://")?.1;
-    let rest = rest.split(['?', '#']).next()?;
+    let rest = url.split_once("://")?.1.split(['?', '#']).next()?;
     let mut parts = rest.split('/').filter(|s| !s.is_empty());
     let host = parts.next()?.to_ascii_lowercase();
-    let first = parts.next()?;
-    let repo = |owner: &str, name: &str| Repo {
-        owner: owner.to_owned(),
-        name: name.strip_suffix(".git").unwrap_or(name).to_owned(),
+    let segs: Vec<&str> = parts.collect();
+    let repo = |host: &str, segs: &[&str]| {
+        let (name, owners) = segs.split_last().filter(|_| segs.len() >= 2)?;
+        let name = name.strip_suffix(".git").unwrap_or(name);
+        Some(Repo {
+            host: host.to_owned(),
+            path: [owners, &[name]].concat().join("/"),
+        })
     };
-    if host == "github.com" || host == "www.github.com" {
-        Some((repo(first, parts.next()?), false))
-    } else {
-        let owner = host.strip_suffix(".github.io")?;
-        Some((repo(owner, first), true))
+    match host.as_str() {
+        "github.com" | "www.github.com" => {
+            Some((repo("github.com", &segs[..segs.len().min(2)])?, false))
+        }
+        h if h == "gitlab.com" || h.starts_with("gitlab.") => {
+            // A GitLab project may sit in subgroups; the page of one ends at `/-/` or a view.
+            let views = [
+                "-",
+                "tree",
+                "blob",
+                "issues",
+                "wikis",
+                "releases",
+                "tags",
+                "merge_requests",
+            ];
+            let end = segs
+                .iter()
+                .position(|s| views.contains(s))
+                .unwrap_or(segs.len());
+            Some((repo(h, &segs[..end])?, false))
+        }
+        h => {
+            let (owner, forge) = match (h.strip_suffix(".github.io"), h.strip_suffix(".gitlab.io"))
+            {
+                (Some(o), _) => (o, "github.com"),
+                (_, Some(o)) => (o, "gitlab.com"),
+                _ => return None,
+            };
+            Some((repo(forge, &[owner, segs.first()?])?, true))
+        }
     }
 }
 
-pub struct Release {
+/// The repositories a project page links to (the first three): where a `url` names a website
+/// instead of a repository, the website says where the code is.
+fn discover(url: &str) -> Vec<Repo> {
+    if !url.starts_with("https://") {
+        return Vec::new();
+    }
+    let Ok(mut r) = AGENT.get(url).call() else {
+        return Vec::new();
+    };
+    if r.status() != 200 {
+        return Vec::new();
+    }
+    let html = r
+        .body_mut()
+        .with_config()
+        .limit(1 << 20)
+        .read_to_string()
+        .unwrap_or_default();
+    let mut found = Vec::new();
+    for href in html.split("href=").skip(1) {
+        let Some(quote) = href.chars().next().filter(|c| *c == '"' || *c == '\'') else {
+            continue;
+        };
+        let link = href[1..].split(quote).next().unwrap_or_default();
+        if let Some((repo, false)) = repo_from_url(link)
+            && !found.contains(&repo)
+        {
+            found.push(repo);
+        }
+    }
+    found.truncate(3);
+    found
+}
+
+pub(crate) struct Release {
     pub tag: String,
     /// The release ships a zip named after the extension's UUID (only looked for when asked).
     pub ships: bool,
 }
 
-pub enum Error {
+pub(crate) enum Error {
     /// GitHub's limit on requests was used up.
     RateLimited,
-    /// github.com has no such repository for us: it does not exist, or it is private.
+    /// The forge has no such repository for us: it does not exist, or it is private.
     Missing,
     Other(String),
 }
@@ -71,7 +137,7 @@ impl From<ureq::Error> for Error {
 type Response = ureq::http::Response<ureq::Body>;
 
 /// The body of an answer; `None` for 404.
-fn read(mut r: Response) -> Result<Option<String>, Error> {
+pub(crate) fn read(mut r: Response) -> Result<Option<String>, Error> {
     let status = r.status().as_u16();
     let limited = r
         .headers()
@@ -102,21 +168,36 @@ fn failure(status: u16, limited: bool, body: &str) -> Error {
     let message = serde_json::from_str::<Value>(body)
         .ok()
         .and_then(|v| v["message"].as_str().map(str::to_owned));
-    Error::Other(message.unwrap_or_else(|| format!("GitHub answered HTTP {status}")))
+    Error::Other(message.unwrap_or_else(|| format!("The server answered HTTP {status}")))
 }
 
-/// The latest release of `repo`, from github.com's pages, which cost no API quota. Only when
-/// they fail is the API asked, if there is a `token`: when the pages are limited, or do not
-/// know the repository (a private one). `uuid` asks whether the release ships that extension.
+/// The latest release of `repo`. GitHub: from github.com's pages, which cost no API quota;
+/// only when they fail is the API asked, if there is a `token`: when the pages are limited, or
+/// do not know the repository (a private one). GitLab: see `gitlab`. `uuid` asks whether the
+/// release ships that extension.
 pub fn latest(
     repo: &Repo,
     token: Option<&str>,
     uuid: Option<&str>,
 ) -> Result<Option<Release>, Error> {
+    if repo.host != "github.com" {
+        return crate::gitlab::latest(repo, uuid);
+    }
     match (latest_web(repo, uuid), token) {
         (Err(Error::RateLimited | Error::Missing), Some(token)) => latest_api(repo, token, uuid),
         (r, _) => r,
     }
+}
+
+/// Is one of the `files` a zip named after the extension: its UUID, or what is before the `@`
+/// (`gnome-extensions pack` makes `<uuid>.shell-extension.zip`; others ship `<name>.zip`)?
+/// Only a sanity check; the zip's own `metadata.json` is what counts, when installing.
+pub(crate) fn ships<'a>(files: impl IntoIterator<Item = &'a str>, uuid: &str) -> bool {
+    let name = uuid.split('@').next().unwrap_or(uuid).to_lowercase();
+    files.into_iter().any(|f| {
+        let f = f.to_lowercase();
+        f.ends_with(".zip") && f.starts_with(&name)
+    })
 }
 
 /// Does GitHub refuse the token (expired, revoked, mistyped)? `/rate_limit` answers 401 to it
@@ -160,22 +241,11 @@ fn api_get(mut url: String, token: &str) -> Result<Option<Value>, Error> {
 /// ponytail: GitHub lists tags by name, not by date; a repo whose newest tag sorts low is
 /// misread; pick by version number if it shows up.
 fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Release>, Error> {
-    let Repo { owner, name } = repo;
-    let api = |path: &str| {
-        api_get(
-            format!("https://api.github.com/repos/{owner}/{name}/{path}"),
-            token,
-        )
-    };
+    let path = &repo.path;
+    let api = |what: &str| api_get(format!("https://api.github.com/repos/{path}/{what}"), token);
     if let Some(r) = api("releases/latest")? {
-        let mut assets = r["assets"].as_array().into_iter().flatten();
-        let ships = uuid.is_some_and(|u| {
-            assets.any(|a| {
-                a["name"]
-                    .as_str()
-                    .is_some_and(|n| n.starts_with(u) && n.ends_with(".zip"))
-            })
-        });
+        let assets = r["assets"].as_array().into_iter().flatten();
+        let ships = uuid.is_some_and(|u| ships(assets.filter_map(|a| a["name"].as_str()), u));
         let tag = r["tag_name"].as_str().unwrap_or_default().to_owned();
         return Ok(Some(Release { tag, ships }));
     }
@@ -190,7 +260,7 @@ fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Rel
 /// `/releases/latest` redirects to the release's page, `/releases/tag/<tag>` (to
 /// `/releases` when there is none: then the tags feed names the newest tag).
 fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error> {
-    let base = format!("https://github.com/{}/{}", repo.owner, repo.name);
+    let base = format!("https://github.com/{}", repo.path);
     let r = AGENT.head(format!("{base}/releases/latest")).call()?;
     let tag = match r.status().as_u16() {
         200 => r
@@ -200,7 +270,7 @@ fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error>
             .map(|(_, t)| t.to_owned()),
         404 => return Err(Error::Missing),
         403 | 429 => return Err(Error::RateLimited),
-        s => return Err(Error::Other(format!("GitHub answered HTTP {s}"))),
+        s => return Err(Error::Other(format!("The server answered HTTP {s}"))),
     };
     let Some(tag) = tag else {
         let feed = read(AGENT.get(format!("{base}/tags.atom")).call()?)?;
@@ -208,17 +278,16 @@ fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error>
         return Ok(tag.map(|tag| Release { tag, ships: false }));
     };
     let ships = match uuid {
-        // The assets are listed on a page of their own, with `@` percent-encoded.
+        // The assets are listed on a page of their own.
         Some(u) => read(
             AGENT
                 .get(format!("{base}/releases/expanded_assets/{tag}"))
                 .call()?,
         )?
         .is_some_and(|html| {
-            let dir = format!("/releases/download/{tag}/");
-            [u.to_owned(), u.replace('@', "%40")]
-                .iter()
-                .any(|u| html.contains(&format!("{dir}{u}")))
+            let name = u.split('@').next().unwrap_or(u);
+            let needle = format!("/releases/download/{tag}/{name}");
+            html.to_lowercase().contains(&needle.to_lowercase())
         }),
         None => false,
     };
@@ -226,7 +295,7 @@ fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error>
 }
 
 /// The newest tag of a repository's `tags.atom`: the title of its first entry.
-fn first_tag(feed: &str) -> Option<String> {
+pub(crate) fn first_tag(feed: &str) -> Option<String> {
     let entry = &feed[feed.find("<entry>")?..];
     let title = &entry[entry.find("<title>")? + 7..];
     Some(title[..title.find("</title>")?].trim().to_owned())
@@ -305,22 +374,32 @@ pub fn check(
     url: Option<&str>,
     token: Option<&str>,
 ) -> Outcome {
-    let Some((repo, guessed)) = url.and_then(repo_from_url) else {
+    let Some(url) = url else {
         return Outcome::NoRepo;
     };
-    // A guess counts only if the release ships this extension: a zip named after its UUID
-    // (`gnome-extensions pack` makes `<uuid>.shell-extension.zip`).
-    match latest(&repo, token, guessed.then_some(uuid)) {
-        Err(Error::RateLimited) => Outcome::RateLimited,
-        Err(Error::Missing) => Outcome::NoRepo,
-        Err(Error::Other(e)) => Outcome::Failed(e),
-        Ok(None) => Outcome::NoRelease,
-        Ok(Some(r)) if guessed && !r.ships => Outcome::NoRepo,
-        Ok(Some(r)) => Outcome::Checked {
-            version: compare(version_name, counter, &r.tag),
-            latest: r.tag,
-        },
+    // A `url` that is not a repository may be a project page that links to it. Such a guess
+    // counts only if the release ships this extension.
+    let candidates = match repo_from_url(url) {
+        Some(found) => vec![found],
+        None => discover(url).into_iter().map(|r| (r, true)).collect(),
+    };
+    let mut outcome = Outcome::NoRepo;
+    for (repo, guessed) in candidates {
+        match latest(&repo, token, guessed.then_some(uuid)) {
+            Err(Error::RateLimited) => return Outcome::RateLimited,
+            Err(Error::Missing) => {}
+            Err(Error::Other(e)) => outcome = Outcome::Failed(e),
+            Ok(None) if !guessed => outcome = Outcome::NoRelease,
+            Ok(Some(r)) if !guessed || r.ships => {
+                return Outcome::Checked {
+                    version: compare(version_name, counter, &r.tag),
+                    latest: r.tag,
+                };
+            }
+            Ok(_) => {}
+        }
     }
+    outcome
 }
 
 #[cfg(test)]
@@ -328,12 +407,13 @@ mod tests {
     use super::*;
 
     fn repo(url: &str) -> Option<(String, String, bool)> {
-        repo_from_url(url).map(|(r, g)| (r.owner, r.name, g))
+        repo_from_url(url).map(|(r, g)| (r.host, r.path, g))
     }
 
     #[test]
     fn urls_reduce_to_a_repository() {
-        let gh = |o: &str, n: &str, g| Some((o.to_owned(), n.to_owned(), g));
+        let gh = |o: &str, n: &str, g| Some(("github.com".to_owned(), format!("{o}/{n}"), g));
+        let gl = |h: &str, p: &str, g| Some((h.to_owned(), p.to_owned(), g));
         assert_eq!(
             repo("https://github.com/aunetx/blur-my-shell"),
             gh("aunetx", "blur-my-shell", false)
@@ -350,6 +430,23 @@ mod tests {
             repo("https://micheleg.github.io/dash-to-dock/"),
             gh("micheleg", "dash-to-dock", true)
         );
+        assert_eq!(
+            repo("https://gitlab.com/rmnvgr/nightthemeswitcher-gnome-shell-extension"),
+            gl(
+                "gitlab.com",
+                "rmnvgr/nightthemeswitcher-gnome-shell-extension",
+                false
+            )
+        );
+        assert_eq!(
+            repo("https://gitlab.gnome.org/World/Shell/ext.git/-/issues/3"),
+            gl("gitlab.gnome.org", "World/Shell/ext", false)
+        );
+        assert_eq!(
+            repo("https://me.gitlab.io/ext/"),
+            gl("gitlab.com", "me/ext", true)
+        );
+        assert_eq!(repo("https://gitlab.com/rmnvgr"), None);
         assert_eq!(repo("https://nightthemeswitcher.romainvigier.fr"), None);
         assert_eq!(repo("https://github.com/aunetx"), None);
         assert_eq!(repo("not a url"), None);
@@ -380,7 +477,18 @@ mod tests {
             msg(failure(401, false, "")),
             "GitHub refused the access token"
         );
-        assert_eq!(msg(failure(500, false, "")), "GitHub answered HTTP 500");
+        assert_eq!(msg(failure(500, false, "")), "The server answered HTTP 500");
+    }
+
+    #[test]
+    fn a_zip_named_after_the_extension() {
+        let uuid = "nightthemeswitcher@romainvigier.fr";
+        assert!(ships(["nightthemeswitcher.zip"], uuid));
+        assert!(ships(
+            [format!("{uuid}.shell-extension.zip").as_str()],
+            uuid
+        ));
+        assert!(!ships(["nightthemeswitcher.tar.gz", "other.zip"], uuid));
     }
 
     #[test]
