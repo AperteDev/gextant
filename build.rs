@@ -14,6 +14,7 @@ fn main() {
     let out = std::env::var("OUT_DIR").unwrap();
     println!("cargo::rerun-if-changed=ui");
     println!("cargo::rerun-if-changed=data");
+    println!("cargo::rerun-if-changed=icons");
     let blueprints: Vec<_> = std::fs::read_dir("ui")
         .unwrap()
         .map(|e| e.unwrap().path())
@@ -34,6 +35,8 @@ fn main() {
                 "ui",
                 "--sourcedir",
                 "data",
+                "--sourcedir",
+                "icons",
                 "--target",
             ])
             .arg(format!("{out}/gextant.gresource"))

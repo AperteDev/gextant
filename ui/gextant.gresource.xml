@@ -7,4 +7,12 @@
   <gresource prefix="/dev/aperte/Gextant/icons/scalable/apps">
     <file>dev.aperte.Gextant.svg</file>
   </gresource>
+  <!-- Icons of the app's own, found by name: GTK looks under the app's resource path. The
+       marks are from Simple Icons (CC0); the brands' trademarks are their owners'. -->
+  <gresource prefix="/dev/aperte/Gextant/icons/scalable/actions">
+    <file>gextant-github-symbolic.svg</file>
+    <file>gextant-gitlab-symbolic.svg</file>
+    <file>gextant-web-symbolic.svg</file>
+    <file>gextant-gnome-symbolic.svg</file>
+  </gresource>
 </gresources>

@@ -368,20 +368,67 @@ pub enum Outcome {
     Failed(String),
 }
 
+/// Where an extension's code is looked for: what the row's icon shows.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Source {
+    GitHub,
+    GitLab,
+    /// A website, where no repository was found behind it.
+    Web,
+}
+
+impl Source {
+    pub fn icon(self) -> &'static str {
+        match self {
+            Source::GitHub => "gextant-github-symbolic",
+            Source::GitLab => "gextant-gitlab-symbolic",
+            Source::Web => "gextant-web-symbolic",
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Source::GitHub => "GitHub",
+            Source::GitLab => "GitLab",
+            Source::Web => "Website",
+        }
+    }
+
+    fn of(repo: &Repo) -> Self {
+        if repo.host == "github.com" {
+            Source::GitHub
+        } else {
+            Source::GitLab
+        }
+    }
+}
+
 /// What looking for an extension's upstream found: the part worth keeping between runs (what is
 /// installed is compared again each time).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Found {
     /// The tag of the latest release (or of the newest tag).
-    Tag(String),
-    NoRepo,
-    NoRelease,
+    Tag {
+        tag: String,
+        source: Source,
+    },
+    NoRepo(Option<Source>),
+    NoRelease(Source),
+}
+
+impl Found {
+    pub fn source(&self) -> Option<Source> {
+        match self {
+            Found::Tag { source, .. } | Found::NoRelease(source) => Some(*source),
+            Found::NoRepo(source) => *source,
+        }
+    }
 }
 
 /// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release.
 pub fn find(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Found, Error> {
     let Some(url) = url else {
-        return Ok(Found::NoRepo);
+        return Ok(Found::NoRepo(None));
     };
     // A `url` that is not a repository may be a project page that links to it. Such a guess
     // counts only if the release ships this extension.
@@ -389,14 +436,19 @@ pub fn find(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Found,
         Some(found) => vec![found],
         None => discover(url).into_iter().map(|r| (r, true)).collect(),
     };
-    let mut result = Ok(Found::NoRepo);
+    let mut result = Ok(Found::NoRepo(Some(Source::Web)));
     for (repo, guessed) in candidates {
         match latest(&repo, token, guessed.then_some(uuid)) {
             Err(Error::RateLimited) => return Err(Error::RateLimited),
             Err(Error::Missing) => {}
             Err(e) => result = Err(e),
-            Ok(None) if !guessed => result = Ok(Found::NoRelease),
-            Ok(Some(r)) if !guessed || r.ships => return Ok(Found::Tag(r.tag)),
+            Ok(None) if !guessed => result = Ok(Found::NoRelease(Source::of(&repo))),
+            Ok(Some(r)) if !guessed || r.ships => {
+                return Ok(Found::Tag {
+                    tag: r.tag,
+                    source: Source::of(&repo),
+                });
+            }
             Ok(_) => {}
         }
     }
@@ -410,12 +462,12 @@ pub fn outcome(
     counter: Option<u64>,
 ) -> Outcome {
     match found {
-        Ok(Found::Tag(latest)) => Outcome::Checked {
+        Ok(Found::Tag { tag: latest, .. }) => Outcome::Checked {
             version: compare(version_name, counter, &latest),
             latest,
         },
-        Ok(Found::NoRepo) | Err(Error::Missing) => Outcome::NoRepo,
-        Ok(Found::NoRelease) => Outcome::NoRelease,
+        Ok(Found::NoRepo(_)) | Err(Error::Missing) => Outcome::NoRepo,
+        Ok(Found::NoRelease(_)) => Outcome::NoRelease,
         Err(Error::RateLimited) => Outcome::RateLimited,
         Err(Error::Other(e)) => Outcome::Failed(e),
     }

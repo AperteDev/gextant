@@ -3,7 +3,7 @@
 
 use crate::cache::{self, Cache};
 use crate::extensions::{self, Extension};
-use crate::upstream::{self, Found, Outcome, Version};
+use crate::upstream::{self, Found, Outcome, Source, Version};
 use crate::{preferences, token};
 use adw::prelude::*;
 use gtk::{gio, glib};
@@ -11,12 +11,44 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 /// A user extension's row, to check and show the result in.
+#[derive(Clone)]
 struct Checked {
     uuid: String,
     version_name: Option<String>,
     counter: Option<u64>,
     url: Option<String>,
+    /// Beside the version: where its code was found, and what it found, unless that is "up to
+    /// date", which turns the version itself green.
+    icon: gtk::Image,
+    version: gtk::Label,
     status: gtk::Label,
+}
+
+impl Checked {
+    fn show(&self, text: &str, class: &str, tooltip: Option<&str>, source: Option<Source>) {
+        let up_to_date = class == "success";
+        let version = self.version.text();
+        // An extension without a version has nothing to turn green: say it in words.
+        let (text, class) = if up_to_date && !version.is_empty() {
+            ("", "dim-label")
+        } else {
+            (text, class)
+        };
+        self.status.set_visible(!text.is_empty());
+        show(&self.status, text, class, tooltip);
+        self.version
+            .set_css_classes(&[if up_to_date { "success" } else { "dim-label" }]);
+        self.version.set_tooltip_text(Some(&if up_to_date {
+            format!("{version}\nUp to date")
+        } else {
+            version.to_string()
+        }));
+        self.icon.set_visible(source.is_some());
+        if let Some(source) = source {
+            self.icon.set_icon_name(Some(source.icon()));
+            self.icon.set_tooltip_text(Some(source.name()));
+        }
+    }
 }
 
 /// What checking needs: the rows, the button that waits for the checks and the banner for the
@@ -59,21 +91,33 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         group.set_visible(rows.peek().is_some());
         for e in rows {
             let row = row(e);
-            row.add_suffix(&version_label(e));
+            let version = version_label(e);
             if !system {
+                let icon = gtk::Image::builder()
+                    .pixel_size(16)
+                    .css_classes(["dim-label"])
+                    .valign(gtk::Align::Center)
+                    .visible(false)
+                    .build();
                 let status = gtk::Label::builder()
                     .valign(gtk::Align::Center)
                     .ellipsize(gtk::pango::EllipsizeMode::End)
                     .max_width_chars(24)
                     .build();
+                row.add_suffix(&icon);
+                row.add_suffix(&version);
                 row.add_suffix(&status);
                 checked.push(Checked {
                     uuid: e.uuid.clone(),
                     version_name: e.version_name.clone(),
                     counter: e.counter,
                     url: e.url.clone(),
+                    icon,
+                    version,
                     status,
                 });
+            } else {
+                row.add_suffix(&version);
             }
             group.add(&row);
         }
@@ -165,11 +209,11 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
     let pending = Rc::new(Cell::new(checker.rows.len()));
     for (r, cached) in checker.rows.iter().zip(cached) {
         if cached.is_none() {
-            show(&r.status, "Checking…", "dim-label", None);
+            r.show("Checking…", "dim-label", None, None);
         }
         let (uuid, version_name, url) = (r.uuid.clone(), r.version_name.clone(), r.url.clone());
         let (counter, token) = (r.counter, token.clone());
-        let (status, checker, pending) = (r.status.clone(), checker.clone(), pending.clone());
+        let (row, checker, pending) = (r.clone(), checker.clone(), pending.clone());
         glib::spawn_future_local(async move {
             let have_token = token.is_some();
             let (u, url2) = (uuid.clone(), url.clone());
@@ -193,35 +237,36 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
                     .borrow_mut()
                     .put(&uuid, url.as_deref(), found.clone(), now);
             }
+            let source = found.as_ref().ok().and_then(Found::source);
             match upstream::outcome(found, version_name.as_deref(), counter) {
                 Outcome::Checked {
                     latest,
                     version: Version::Newer,
-                } => show(
-                    &status,
+                } => row.show(
                     &format!("Update available: {latest}"),
                     "accent",
                     None,
+                    source,
                 ),
                 Outcome::Checked {
                     version: Version::Same,
                     ..
-                } => show(&status, "Up to date", "success", None),
+                } => row.show("Up to date", "success", None, source),
                 Outcome::Checked {
                     latest,
                     version: Version::Unknown,
-                } => show(
-                    &status,
+                } => row.show(
                     &format!("Latest: {latest}"),
                     "dim-label",
                     Some(&format!(
                         "Latest release: {latest}\nThe installed version cannot be compared with it"
                     )),
+                    source,
                 ),
-                Outcome::NoRepo => show(&status, "No repository found", "dim-label", None),
-                Outcome::NoRelease => show(&status, "No releases", "dim-label", None),
+                Outcome::NoRepo => row.show("No repository found", "dim-label", None, source),
+                Outcome::NoRelease => row.show("No releases", "dim-label", None, source),
                 Outcome::RateLimited => {
-                    show(&status, "Rate limit reached", "warning", None);
+                    row.show("Rate limit reached", "warning", None, None);
                     checker.banner.set_title(if have_token {
                         "GitHub's rate limit is used up. Try again later."
                     } else {
@@ -229,7 +274,7 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
                     });
                     checker.banner.set_revealed(true);
                 }
-                Outcome::Failed(e) => show(&status, "Check failed", "error", Some(&e)),
+                Outcome::Failed(e) => row.show("Check failed", "error", Some(&e), None),
             }
             pending.set(pending.get() - 1);
             if pending.get() == 0 {

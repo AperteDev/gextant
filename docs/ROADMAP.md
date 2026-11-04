@@ -13,7 +13,10 @@ The list shows the installed extensions (name, UUID, version), the user's and th
 system's (`/usr/share`, no actions: they cannot be updated by the user), and for the user's the
 result of checking GitHub (up to date, update available, latest release when the versions
 cannot be compared, no repository, no releases, failed), on start and from the header's
-refresh button. What is left on a row:
+refresh button. An icon beside the version says where the code was found (GitHub, GitLab, a
+website where no repository was found), and an up-to-date version is shown green, with no
+text. `icons/` also has the GNOME mark, for extensions.gnome.org as a source, when that is a
+source (not used yet). What is left on a row:
 
 - a mode, for user extensions: **Off** (not checked), **Check** (the default: look for updates,
   tell, never install) or **Update** (install new versions by itself); today every user
