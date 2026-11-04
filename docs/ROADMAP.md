@@ -65,7 +65,8 @@ tag; `tags.atom` for repos that only tag; the assets page for a guessed reposito
 the fallback, and only with an access token (Preferences, kept in the keyring): when the pages
 are limited or do not know the repository (a private one). Downloads for updating should use
 `/releases/latest/download/<file>`, which costs no quota either. When even that is limited, a
-banner says so and opens Preferences. A 403 counts as a rate limit only when GitHub says so;
+banner says so and opens Preferences. A second banner says when GitHub refuses the token
+(expired or revoked), found with `/rate_limit`, once per check, which costs no quota. A 403 counts as a rate limit only when GitHub says so;
 otherwise its message is shown (a token that may not see a repository gets one). Still to do: remember what was found between runs
 (`ETag`, and the repos without releases), so a start does not ask again for all of them.
 
@@ -137,6 +138,8 @@ Roughly in this order, each with its own plan when it comes:
 - **Packages**: Flatpak (needs `--filesystem=xdg-data/gnome-shell/extensions` and the network;
   `org.gnome.Shell.Extensions` over D-Bus for the Shell version), AUR (`gextant`,
   `gextant-bin`, `gextant-git`), `.deb`; the desktop file, metainfo and icon come with them.
+- **A warning before the token expires**: the API tells when in its
+  `github-authentication-token-expiration` header (on any answer to the token).
 - **Translations** (gettext, Polish first), as the sibling apps do; CI (fmt, clippy, tests).
 
 ## Open questions and risks

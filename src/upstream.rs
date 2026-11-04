@@ -119,6 +119,16 @@ pub fn latest(
     }
 }
 
+/// Does GitHub refuse the token (expired, revoked, mistyped)? `/rate_limit` answers 401 to it
+/// and costs no quota. Any other answer, or none, is not a refusal.
+pub fn token_refused(token: &str) -> bool {
+    AGENT
+        .get("https://api.github.com/rate_limit")
+        .header("Authorization", format!("Bearer {token}"))
+        .call()
+        .is_ok_and(|r| r.status() == 401)
+}
+
 /// GET from the API with the token, `None` for 404. A moved repository answers 301 to its
 /// numeric URL: followed here, as the HTTP client drops the token on a redirect (and the
 /// anonymous request that follows is limited to 60 an hour).

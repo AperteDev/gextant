@@ -24,6 +24,13 @@ Adw.ApplicationWindow window {
     }
 
     [top]
+    Adw.Banner token_banner {
+      title: "Your GitHub access token expired or was revoked.";
+      button-label: "Preferences";
+      action-name: "win.preferences";
+    }
+
+    [top]
     Adw.Banner banner {
       button-label: "Preferences";
       action-name: "win.preferences";

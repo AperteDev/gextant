@@ -24,6 +24,8 @@ struct Checker {
     rows: Vec<Checked>,
     button: gtk::Button,
     banner: adw::Banner,
+    /// For a token GitHub refuses.
+    token_banner: adw::Banner,
     /// Counts the runs: a result from an older one (the token changed meanwhile) is dropped.
     run: Cell<u32>,
 }
@@ -83,6 +85,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         rows: checked,
         button: button.clone(),
         banner: object("banner").downcast().unwrap(),
+        token_banner: object("token_banner").downcast().unwrap(),
         run: Cell::new(0),
     });
     button.connect_clicked({
@@ -133,7 +136,17 @@ fn check_all(checker: &Rc<Checker>) {
     checker.run.set(run);
     checker.button.set_sensitive(false);
     checker.banner.set_revealed(false);
+    checker.token_banner.set_revealed(false);
     let token = token::load();
+    if let Some(token) = token.clone() {
+        let checker = checker.clone();
+        glib::spawn_future_local(async move {
+            let refused = gio::spawn_blocking(move || upstream::token_refused(&token)).await;
+            if matches!(refused, Ok(true)) && checker.run.get() == run {
+                checker.token_banner.set_revealed(true);
+            }
+        });
+    }
     let pending = Rc::new(Cell::new(checker.rows.len()));
     for r in &checker.rows {
         show(&r.status, "Checking…", "dim-label", None);
