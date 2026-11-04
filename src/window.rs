@@ -2,7 +2,7 @@
 //! user's have upstream.
 
 use crate::cache::{self, Cache};
-use crate::check::{self, Checks, Chip, Found, View};
+use crate::check::{self, Checks, Chip, Found, View, abbreviate};
 use crate::extensions::{self, Extension};
 use crate::upstream::{self, Version};
 use crate::{preferences, token};
@@ -39,8 +39,7 @@ impl Checked {
     fn render(&self, view: View) {
         self.clear();
         if let Some(installed) = view.installed {
-            self.holder
-                .append(&label(&installed, "dim-label", Some("Installed")));
+            self.holder.append(&installed_widget(&installed));
         }
         for chip in &view.chips {
             self.holder.append(&chip_widget(chip));
@@ -61,6 +60,28 @@ fn label(text: &str, class: &str, tip: Option<&str>) -> gtk::Label {
         .tooltip_text(tip.unwrap_or_default())
         .valign(gtk::Align::Center)
         .build()
+}
+
+/// The installed version, with the mark of this computer.
+fn installed_widget(version: &str) -> gtk::Box {
+    let widget = gtk::Box::builder()
+        .spacing(4)
+        .valign(gtk::Align::Center)
+        .tooltip_text(format!("Installed: {version}"))
+        .build();
+    widget.append(
+        &gtk::Image::builder()
+            .icon_name("gextant-local-symbolic")
+            .pixel_size(16)
+            .css_classes(["dim-label"])
+            .build(),
+    );
+    widget.append(&label(
+        &abbreviate(version),
+        "dim-label",
+        Some(&format!("Installed: {version}")),
+    ));
+    widget
 }
 
 /// A version with the icons of its sources, in the colour of how it stands against what is
@@ -86,7 +107,7 @@ fn chip_widget(chip: &Chip) -> gtk::Box {
                 .build(),
         );
     }
-    widget.append(&label(&chip.version, class, None));
+    widget.append(&label(&abbreviate(&chip.version), class, Some(&chip.tip)));
     widget
 }
 
@@ -195,10 +216,8 @@ fn row(e: &Extension) -> adw::ActionRow {
 fn version_label(e: &Extension) -> gtk::Label {
     let version = e.version().unwrap_or_default();
     gtk::Label::builder()
-        .label(&version)
+        .label(abbreviate(&version))
         .css_classes(["dim-label"])
-        .ellipsize(gtk::pango::EllipsizeMode::End)
-        .max_width_chars(16)
         .tooltip_text(version)
         .valign(gtk::Align::Center)
         .build()

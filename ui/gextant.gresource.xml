@@ -14,5 +14,6 @@
     <file>gextant-gitlab-symbolic.svg</file>
     <file>gextant-web-symbolic.svg</file>
     <file>gextant-gnome-symbolic.svg</file>
+    <file>gextant-local-symbolic.svg</file>
   </gresource>
 </gresources>

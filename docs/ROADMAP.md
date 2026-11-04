@@ -16,7 +16,8 @@ or GitLab) and extensions.gnome.org (EGO). Each shows as its latest version with
 icon coloured as the version is. Sources that agree make one chip with two icons; those that
 differ sit side by side with their own versions. Green: what is installed is current for that
 source; yellow: that source has something newer; grey: the two cannot be compared. The
-installed version is shown by itself only where no chip has it. Where there is no version to
+installed version is shown by itself, with a computer icon, only where no chip has it. A long
+version is cut to 12 characters; the whole one is in the tooltip. Where there is no version to
 show, a word says why (no repository, no releases, rate limit reached, check failed). What is
 left on a row:
 

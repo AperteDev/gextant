@@ -94,6 +94,17 @@ fn rank(v: Version) -> u8 {
     }
 }
 
+/// A version as short as a row has room for: `2.1.2-17+17d5fd1-dirty` is `2.1.2-17+17…`. The
+/// whole one goes in the tooltip.
+pub fn abbreviate(version: &str) -> String {
+    const MAX: usize = 12;
+    if version.chars().count() <= MAX {
+        return version.to_owned();
+    }
+    let head: String = version.chars().take(MAX - 1).collect();
+    format!("{head}…")
+}
+
 pub fn view(checks: &Checks, version_name: Option<&str>, counter: Option<u64>) -> View {
     let installed = version_name
         .map(str::to_owned)
@@ -207,6 +218,13 @@ mod tests {
             .iter()
             .map(|c| (c.sources.len(), c.version.as_str(), c.state))
             .collect()
+    }
+
+    #[test]
+    fn long_versions_are_abbreviated() {
+        assert_eq!(abbreviate("2.1.2"), "2.1.2");
+        assert_eq!(abbreviate("123456789012"), "123456789012");
+        assert_eq!(abbreviate("2.1.2-17+17d5fd1-dirty.fix"), "2.1.2-17+17…");
     }
 
     #[test]
