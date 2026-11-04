@@ -372,7 +372,7 @@ impl Source {
         match self {
             Source::GitHub => "gextant-github-symbolic",
             Source::GitLab => "gextant-gitlab-symbolic",
-            Source::Web => "gextant-web-symbolic",
+            Source::Web => "globe-symbolic",
             Source::Ego => "gextant-gnome-symbolic",
         }
     }

@@ -71,7 +71,7 @@ fn installed_widget(version: &str) -> gtk::Box {
         .build();
     widget.append(
         &gtk::Image::builder()
-            .icon_name("gextant-local-symbolic")
+            .icon_name("computer-symbolic")
             .pixel_size(16)
             .css_classes(["dim-label"])
             .build(),

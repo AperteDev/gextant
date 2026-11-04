@@ -8,12 +8,12 @@
     <file>dev.aperte.Gextant.svg</file>
   </gresource>
   <!-- Icons of the app's own, found by name: GTK looks under the app's resource path. The
-       marks are from Simple Icons (CC0); the brands' trademarks are their owners'. -->
+       marks are from Simple Icons (CC0); the brands' trademarks are their owners'. The globe
+       has the name of the theme's, which is used when there is one (Adwaita has none). -->
   <gresource prefix="/dev/aperte/Gextant/icons/scalable/actions">
     <file>gextant-github-symbolic.svg</file>
     <file>gextant-gitlab-symbolic.svg</file>
-    <file>gextant-web-symbolic.svg</file>
+    <file>globe-symbolic.svg</file>
     <file>gextant-gnome-symbolic.svg</file>
-    <file>gextant-local-symbolic.svg</file>
   </gresource>
 </gresources>
