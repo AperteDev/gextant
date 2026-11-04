@@ -253,26 +253,36 @@ fn numbers(v: &str) -> Option<Vec<u64>> {
         .collect()
 }
 
-/// Is release `tag` newer than what is installed? Fewer numbers count as zeros. Without a
-/// `version-name`, a tag that is a single number (`v66`) is compared with EGO's counter: many
-/// authors tag the number EGO gave. ponytail: a guess; an author numbering independently can
-/// show a false update or none; "mark as installed" (roadmap) is the certain way.
+/// The number EGO gave a release, when its tag carries it as the last number after a `v` or
+/// `+`, or is just that number: `v66`, `extensions.gnome.org-v110` (Dash to Dock), `2.2.0+10`
+/// (Solaar), `66`. Not `v1.2.0`.
+fn ego_number(tag: &str) -> Option<u64> {
+    let head = tag.trim_end_matches(|c: char| c.is_ascii_digit());
+    (head.is_empty() || head.ends_with(['v', 'V', '+'])).then(|| tag[head.len()..].parse().ok())?
+}
+
+/// Is release `tag` newer than what is installed? Against a `version-name`, as numbers (fewer
+/// count as zeros). Without one, EGO's counter against the number in the tag, if it has one.
+/// ponytail: a guess; an author numbering independently can show a false update or none;
+/// "mark as installed" (roadmap) is the certain way.
 pub fn compare(version_name: Option<&str>, counter: Option<u64>, tag: &str) -> Version {
-    let Some(mut latest) = numbers(tag) else {
-        return Version::Unknown;
-    };
-    let mut have = match (version_name.and_then(numbers), counter) {
-        (Some(have), _) => have,
-        (None, Some(c)) if latest.len() == 1 => vec![c],
-        _ => return Version::Unknown,
-    };
-    let len = have.len().max(latest.len());
-    have.resize(len, 0);
-    latest.resize(len, 0);
-    if latest > have {
-        Version::Newer
-    } else {
-        Version::Same
+    if let Some(mut have) = version_name.and_then(numbers) {
+        let Some(mut latest) = numbers(tag) else {
+            return Version::Unknown;
+        };
+        let len = have.len().max(latest.len());
+        have.resize(len, 0);
+        latest.resize(len, 0);
+        return if latest > have {
+            Version::Newer
+        } else {
+            Version::Same
+        };
+    }
+    match (counter, ego_number(tag)) {
+        (Some(have), Some(latest)) if latest > have => Version::Newer,
+        (Some(_), Some(_)) => Version::Same,
+        _ => Version::Unknown,
     }
 }
 
@@ -387,6 +397,16 @@ mod tests {
         assert_eq!(compare(None, Some(66), "v67"), Version::Newer);
         assert_eq!(compare(None, Some(25), "12"), Version::Same);
         assert_eq!(compare(None, Some(66), "v1.2.0"), Version::Unknown);
+        assert_eq!(
+            compare(None, Some(110), "extensions.gnome.org-v110"),
+            Version::Same
+        );
+        assert_eq!(
+            compare(None, Some(111), "extensions.gnome.org-v110"),
+            Version::Same
+        );
+        assert_eq!(compare(None, Some(9), "2.2.0+10"), Version::Newer);
+        assert_eq!(compare(None, Some(10), "2.2.0+10"), Version::Same);
         assert_eq!(c(Some("2.5.0"), "v2.6.0"), Version::Newer);
         assert_eq!(c(Some("2.5.0"), "2.5"), Version::Same);
         assert_eq!(c(Some("2.5.1"), "v2.5.0"), Version::Same);

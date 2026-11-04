@@ -43,7 +43,9 @@ In this order, the first that holds:
 2. `url` from `metadata.json`, reduced to the repository: `github.com/<owner>/<repo>`, without
    `.git`, `/wiki`, `/tree/…` and the like.
 3. A project page on `<owner>.github.io/<repo>`: the candidate `github.com/<owner>/<repo>`.
-4. Otherwise: no upstream; the row asks for one.
+4. Planned: a project page on another domain (Night Theme Switcher's own site) is fetched and
+   searched for a link to a repository on a known forge; accepted by the rule below.
+5. Otherwise: no upstream; the row asks for one.
 
 A guess (3) is accepted only if the latest release has a zip named after the extension's UUID
 (`gnome-extensions pack` names it `<uuid>.shell-extension.zip`). Still to do: the same check for
@@ -126,12 +128,18 @@ Roughly in this order, each with its own plan when it comes:
 - **Settings button**: opens the extension's preferences (`OpenExtensionPrefs`), as in the
   screenshot of the Extensions app; shown only for extensions that have some.
 - **Other forges**: GitLab (gitlab.com and self-hosted), Codeberg and Forgejo, with the same
-  checks; later a plain git URL.
+  checks (GitLab: `/-/releases/permalink/latest`, `/-/tags?format=atom`); later a plain git URL.
+  Night Theme Switcher needs it: its site links to GitLab, whose tags are EGO's numbers.
 - **Background checks**: a check without the window and a notification, for extensions in
   Check or Update mode (a user timer or the Background portal; to be planned together with
   autostart).
 - **Rollback**: back to the backed-up version from the row.
 - **Tracking a branch** for repositories that publish no releases (the version being a commit).
+  Before installing from one, the row can say what the web gives for free: the date of the last
+  commit (`commits/HEAD.atom`), against the date the extension's files were written (both
+  repos of that kind here, PiP on top and Legacy Theme Switcher, were last committed days
+  before their install, so "no change" would be right); file times are unreliable after a
+  copy or restore.
 - **Search** for extensions in repositories, to install from: where to search (GitHub topics
   such as `gnome-shell-extension`, a curated index, EGO's list only to *find* repositories) and
   how to judge what is worth showing are not decided yet; planned on their own.
@@ -151,9 +159,9 @@ Roughly in this order, each with its own plan when it comes:
   the latest release and ask once "is this installed?" (**Mark as installed**), which is
   certain, a little work for the user. Leaning to (b), with (a) as the hint. Built: where
   `version-name` looks like the tag (`2.5.0` and `v2.5.0`) they are compared directly, and a
-  tag that is a single number (`v66`) is compared with EGO's counter, which fits 5 of the 13
-  extensions tried (their authors tag EGO's number); wrong for an author who numbers on their
-  own. Tags such as `extensions.gnome.org-v110` are not read.
+  tag that carries EGO's number (`v66`, `66`, `extensions.gnome.org-v110`, `2.2.0+10`) is compared
+  with EGO's counter, which fits 8 of the 13 extensions tried (their authors tag EGO's number);
+  wrong for an author who numbers on their own. A tag such as `v1.2.0` is not read.
 - **EGO updates against ours.** The Shell can itself offer updates for extensions installed
   from EGO; its version of the extension could replace ours, even with an older one, as the
   upstream zip's `metadata.json` carries no EGO `version`. To test on a real Shell before
