@@ -3,7 +3,7 @@
 # the ones GNOME Shell runs. Kept between runs; sandbox-reset wipes it.
 sandbox:
 	cargo build
-	GEXTANT_SANDBOX=1 XDG_DATA_HOME=$(CURDIR)/target/sandbox target/debug/gextant
+	GEXTANT_SANDBOX=1 XDG_DATA_HOME=$(CURDIR)/target/sandbox XDG_CACHE_HOME=$(CURDIR)/target/sandbox/cache target/debug/gextant
 
 sandbox-reset:
 	rm -rf target/sandbox

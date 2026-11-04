@@ -52,8 +52,7 @@ A guess (3, 4) is accepted only if the latest release has a zip named after the 
 UUID, or what is before the `@` (`gnome-extensions pack` names it `<uuid>.shell-extension.zip`;
 Night Theme Switcher ships `nightthemeswitcher.zip`). Still to do: the same check for a
 repository the user sets, by the downloaded zip's `metadata.json` (see Updating), and keeping
-the accepted repository, so a later release naming another `url` never moves it, and not
-fetching a project page again on every start.
+the accepted repository, so a later release naming another `url` never moves it.
 
 GitHub and GitLab in 0.1; Codeberg and Forgejo are under [Later](#later).
 
@@ -72,8 +71,11 @@ are limited or do not know the repository (a private one). Downloads for updatin
 `/releases/latest/download/<file>`, which costs no quota either. When even that is limited, a
 banner says so and opens Preferences. A second banner says when GitHub refuses the token
 (expired or revoked), found with `/rate_limit`, once per check, which costs no quota. A 403 counts as a rate limit only when GitHub says so;
-otherwise its message is shown (a token that may not see a repository gets one). Still to do: remember what was found between runs
-(`ETag`, and the repos without releases), so a start does not ask again for all of them.
+otherwise its message is shown (a token that may not see a repository gets one). What was found is kept in the cache folder
+(`checks.json`): 6 hours for a release, 24 for "no repository" (which can cost a project
+page); the refresh button asks again anyway. Failures and rate limits are not kept, and the
+installed version is compared again each time. Not built: conditional requests (`ETag`), to
+make asking again cheaper still.
 
 ### Updating
 
@@ -176,7 +178,7 @@ Roughly in this order, each with its own plan when it comes:
 - **Wayland** cannot reload an extension: every update waits for a login. On X11 the Shell can
   reload (`Alt+F2`, `r`); not worth a code path for now.
 - **GitHub's rate limit** on github.com's pages is not documented; the banner is there for when
-  it is hit. If it is hit often, remembering results between runs is the next step.
+  it is hit. Results are kept for hours, which already spares most requests.
 - **The pages' markup** (the assets page, `tags.atom`) is not an API: it can change. The API
   fallback does not depend on them.
 

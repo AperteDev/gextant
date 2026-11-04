@@ -22,7 +22,7 @@
 ## Testing
 
 - `make sandbox` runs a separate copy (`GEXTANT_SANDBOX`, app id `dev.aperte.Gextant.Sandbox`)
-  with `XDG_DATA_HOME=target/sandbox`: its data and the extensions it manages
+  with `XDG_DATA_HOME=target/sandbox` (and `XDG_CACHE_HOME=target/sandbox/cache`): its data and the extensions it manages
   (`target/sandbox/gnome-shell/extensions/`) are separate from the real ones, so an update
   never touches what the Shell runs. Put test extensions there; `make sandbox-reset` wipes it.
 - To see and drive the app, use the `waydriver` MCP server: `start_session` with `command` the

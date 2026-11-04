@@ -1,0 +1,118 @@
+//! What the last checks found, kept for a few hours so a start does not ask the forges about every
+//! extension again. In the cache folder, so it can be deleted any time; a failure is never kept.
+
+use crate::upstream::Found;
+use gtk::glib;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const HOUR: u64 = 3600;
+
+/// How long a result stays good: a missing repository is looked for again less often (it costs
+/// a project page each time), a release more often, as that is what changes.
+fn lifetime(found: &Found) -> u64 {
+    match found {
+        Found::NoRepo => 24 * HOUR,
+        _ => 6 * HOUR,
+    }
+}
+
+pub fn now() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+#[derive(Serialize, Deserialize)]
+struct Entry {
+    /// When it was found (unix time), and for which `url`: another one asks again.
+    at: u64,
+    url: String,
+    found: Found,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+pub struct Cache(HashMap<String, Entry>);
+
+fn path() -> PathBuf {
+    glib::user_cache_dir().join("gextant/checks.json")
+}
+
+impl Cache {
+    /// What was kept; empty if there is nothing, or nothing readable.
+    pub fn load() -> Self {
+        std::fs::read_to_string(path())
+            .ok()
+            .and_then(|t| serde_json::from_str(&t).ok())
+            .unwrap_or_default()
+    }
+
+    /// Best effort: a cache that cannot be written is only a slower start.
+    pub fn save(&self) {
+        let path = path();
+        let _ = std::fs::create_dir_all(path.parent().unwrap());
+        let tmp = path.with_extension("tmp");
+        if let Ok(text) = serde_json::to_string(self)
+            && std::fs::write(&tmp, text).is_ok()
+        {
+            let _ = std::fs::rename(tmp, path);
+        }
+    }
+
+    pub fn get(&self, uuid: &str, url: Option<&str>, now: u64) -> Option<Found> {
+        let e = self.0.get(uuid)?;
+        let fresh = now.saturating_sub(e.at) < lifetime(&e.found);
+        (fresh && e.url == url.unwrap_or_default()).then(|| e.found.clone())
+    }
+
+    pub fn put(&mut self, uuid: &str, url: Option<&str>, found: Found, now: u64) {
+        let url = url.unwrap_or_default().to_owned();
+        self.0.insert(
+            uuid.to_owned(),
+            Entry {
+                at: now,
+                url,
+                found,
+            },
+        );
+    }
+
+    /// Forget the extensions that are not installed any more.
+    pub fn retain(&mut self, uuids: &[&str]) {
+        self.0.retain(|uuid, _| uuids.contains(&uuid.as_str()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn results_expire_and_follow_the_url() {
+        let mut c = Cache::default();
+        let (u, url) = ("a@b", Some("https://github.com/o/r"));
+        c.put(u, url, Found::Tag("v1".into()), 1000);
+        assert_eq!(
+            c.get(u, url, 1000 + 6 * HOUR - 1),
+            Some(Found::Tag("v1".into()))
+        );
+        assert_eq!(c.get(u, url, 1000 + 6 * HOUR), None);
+        assert_eq!(c.get(u, Some("https://github.com/o/other"), 1000), None);
+        c.put(u, None, Found::NoRepo, 1000);
+        assert_eq!(c.get(u, None, 1000 + 23 * HOUR), Some(Found::NoRepo));
+        assert_eq!(c.get(u, None, 1000 + 24 * HOUR), None);
+    }
+
+    #[test]
+    fn survives_a_round_trip_and_forgets_removed_extensions() {
+        let mut c = Cache::default();
+        c.put("a@b", None, Found::NoRelease, 5);
+        c.put("c@d", None, Found::Tag("2".into()), 5);
+        c.retain(&["a@b"]);
+        let back: Cache = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert_eq!(back.get("a@b", None, 6), Some(Found::NoRelease));
+        assert_eq!(back.get("c@d", None, 6), None);
+    }
+}

@@ -1,12 +1,13 @@
 //! The main window: the installed extensions, the user's and the system's, with what the
 //! user's have upstream.
 
+use crate::cache::{self, Cache};
 use crate::extensions::{self, Extension};
-use crate::upstream::{self, Outcome, Version};
+use crate::upstream::{self, Found, Outcome, Version};
 use crate::{preferences, token};
 use adw::prelude::*;
 use gtk::{gio, glib};
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 /// A user extension's row, to check and show the result in.
@@ -28,6 +29,7 @@ struct Checker {
     token_banner: adw::Banner,
     /// Counts the runs: a result from an older one (the token changed meanwhile) is dropped.
     run: Cell<u32>,
+    cache: RefCell<Cache>,
 }
 
 pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
@@ -87,22 +89,23 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         banner: object("banner").downcast().unwrap(),
         token_banner: object("token_banner").downcast().unwrap(),
         run: Cell::new(0),
+        cache: RefCell::new(Cache::load()),
     });
     button.connect_clicked({
         let checker = checker.clone();
-        move |_| check_all(&checker)
+        move |_| check_all(&checker, true)
     });
     let preferences = gio::ActionEntry::builder("preferences")
         .activate({
             let checker = checker.clone();
             move |window: &adw::ApplicationWindow, _, _| {
                 let checker = checker.clone();
-                preferences::present(window, move || check_all(&checker));
+                preferences::present(window, move || check_all(&checker, false));
             }
         })
         .build();
     window.add_action_entries([preferences]);
-    check_all(&checker);
+    check_all(&checker, false);
     window
 }
 
@@ -127,8 +130,9 @@ fn version_label(e: &Extension) -> gtk::Label {
         .build()
 }
 
-/// Check every user extension on its own thread; the button waits for the last.
-fn check_all(checker: &Rc<Checker>) {
+/// Check every user extension on its own thread; the button waits for the last. What was found
+/// less than a few hours ago is not looked for again, unless `force` (the refresh button).
+fn check_all(checker: &Rc<Checker>, force: bool) {
     if checker.rows.is_empty() {
         return;
     }
@@ -137,8 +141,19 @@ fn check_all(checker: &Rc<Checker>) {
     checker.button.set_sensitive(false);
     checker.banner.set_revealed(false);
     checker.token_banner.set_revealed(false);
+    let now = cache::now();
+    let cached: Vec<Option<Found>> = {
+        let cache = checker.cache.borrow();
+        let get = |r: &Checked| cache.get(&r.uuid, r.url.as_deref(), now);
+        checker
+            .rows
+            .iter()
+            .map(|r| if force { None } else { get(r) })
+            .collect()
+    };
     let token = token::load();
-    if let Some(token) = token.clone() {
+    // Only when something is about to be asked of GitHub: the token matters then.
+    if let Some(token) = token.clone().filter(|_| cached.iter().any(Option::is_none)) {
         let checker = checker.clone();
         glib::spawn_future_local(async move {
             let refused = gio::spawn_blocking(move || upstream::token_refused(&token)).await;
@@ -148,28 +163,37 @@ fn check_all(checker: &Rc<Checker>) {
         });
     }
     let pending = Rc::new(Cell::new(checker.rows.len()));
-    for r in &checker.rows {
-        show(&r.status, "Checking…", "dim-label", None);
+    for (r, cached) in checker.rows.iter().zip(cached) {
+        if cached.is_none() {
+            show(&r.status, "Checking…", "dim-label", None);
+        }
         let (uuid, version_name, url) = (r.uuid.clone(), r.version_name.clone(), r.url.clone());
         let (counter, token) = (r.counter, token.clone());
         let (status, checker, pending) = (r.status.clone(), checker.clone(), pending.clone());
         glib::spawn_future_local(async move {
             let have_token = token.is_some();
-            let outcome = gio::spawn_blocking(move || {
-                upstream::check(
-                    &uuid,
-                    version_name.as_deref(),
-                    counter,
-                    url.as_deref(),
-                    token.as_deref(),
-                )
+            let (u, url2) = (uuid.clone(), url.clone());
+            let (found, fresh) = gio::spawn_blocking(move || match cached {
+                Some(found) => (Ok(found), false),
+                None => (upstream::find(&u, url2.as_deref(), token.as_deref()), true),
             })
             .await
-            .unwrap_or_else(|_| Outcome::Failed("The check crashed".into()));
+            .unwrap_or_else(|_| {
+                (
+                    Err(upstream::Error::Other("The check crashed".into())),
+                    false,
+                )
+            });
             if checker.run.get() != run {
                 return;
             }
-            match outcome {
+            if let (Ok(found), true) = (&found, fresh) {
+                checker
+                    .cache
+                    .borrow_mut()
+                    .put(&uuid, url.as_deref(), found.clone(), now);
+            }
+            match upstream::outcome(found, version_name.as_deref(), counter) {
                 Outcome::Checked {
                     latest,
                     version: Version::Newer,
@@ -210,6 +234,10 @@ fn check_all(checker: &Rc<Checker>) {
             pending.set(pending.get() - 1);
             if pending.get() == 0 {
                 checker.button.set_sensitive(true);
+                let mut cache = checker.cache.borrow_mut();
+                let uuids: Vec<&str> = checker.rows.iter().map(|r| r.uuid.as_str()).collect();
+                cache.retain(&uuids);
+                cache.save();
             }
         });
     }

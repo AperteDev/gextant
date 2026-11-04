@@ -1,6 +1,7 @@
 //! An extension's upstream: the repository its `url` names (GitHub or GitLab), its latest
 //! release, and whether that is newer than what is installed.
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -120,7 +121,7 @@ pub(crate) struct Release {
     pub ships: bool,
 }
 
-pub(crate) enum Error {
+pub enum Error {
     /// GitHub's limit on requests was used up.
     RateLimited,
     /// The forge has no such repository for us: it does not exist, or it is private.
@@ -367,15 +368,20 @@ pub enum Outcome {
     Failed(String),
 }
 
-pub fn check(
-    uuid: &str,
-    version_name: Option<&str>,
-    counter: Option<u64>,
-    url: Option<&str>,
-    token: Option<&str>,
-) -> Outcome {
+/// What looking for an extension's upstream found: the part worth keeping between runs (what is
+/// installed is compared again each time).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub enum Found {
+    /// The tag of the latest release (or of the newest tag).
+    Tag(String),
+    NoRepo,
+    NoRelease,
+}
+
+/// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release.
+pub fn find(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Found, Error> {
     let Some(url) = url else {
-        return Outcome::NoRepo;
+        return Ok(Found::NoRepo);
     };
     // A `url` that is not a repository may be a project page that links to it. Such a guess
     // counts only if the release ships this extension.
@@ -383,23 +389,36 @@ pub fn check(
         Some(found) => vec![found],
         None => discover(url).into_iter().map(|r| (r, true)).collect(),
     };
-    let mut outcome = Outcome::NoRepo;
+    let mut result = Ok(Found::NoRepo);
     for (repo, guessed) in candidates {
         match latest(&repo, token, guessed.then_some(uuid)) {
-            Err(Error::RateLimited) => return Outcome::RateLimited,
+            Err(Error::RateLimited) => return Err(Error::RateLimited),
             Err(Error::Missing) => {}
-            Err(Error::Other(e)) => outcome = Outcome::Failed(e),
-            Ok(None) if !guessed => outcome = Outcome::NoRelease,
-            Ok(Some(r)) if !guessed || r.ships => {
-                return Outcome::Checked {
-                    version: compare(version_name, counter, &r.tag),
-                    latest: r.tag,
-                };
-            }
+            Err(e) => result = Err(e),
+            Ok(None) if !guessed => result = Ok(Found::NoRelease),
+            Ok(Some(r)) if !guessed || r.ships => return Ok(Found::Tag(r.tag)),
             Ok(_) => {}
         }
     }
-    outcome
+    result
+}
+
+/// What to show for what was found, against what is installed.
+pub fn outcome(
+    found: Result<Found, Error>,
+    version_name: Option<&str>,
+    counter: Option<u64>,
+) -> Outcome {
+    match found {
+        Ok(Found::Tag(latest)) => Outcome::Checked {
+            version: compare(version_name, counter, &latest),
+            latest,
+        },
+        Ok(Found::NoRepo) | Err(Error::Missing) => Outcome::NoRepo,
+        Ok(Found::NoRelease) => Outcome::NoRelease,
+        Err(Error::RateLimited) => Outcome::RateLimited,
+        Err(Error::Other(e)) => Outcome::Failed(e),
+    }
 }
 
 #[cfg(test)]
