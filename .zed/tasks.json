@@ -1,0 +1,33 @@
+[
+  {
+    "label": "run",
+    "command": "cargo run",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "run in sandbox",
+    // Own data and its own extensions folder, next to the normal app.
+    "command": "make sandbox",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "reset sandbox",
+    "command": "make sandbox-reset",
+    "use_new_terminal": false,
+    "reveal": "no_focus",
+    "hide": "on_success"
+  },
+  {
+    "label": "quit running instance",
+    // --auto-start=no so this never D-Bus-activates a copy just to quit it.
+    "command": "busctl --user --auto-start=no call dev.aperte.Gextant /dev/aperte/Gextant org.gtk.Actions Activate 'sava{sv}' quit 0 0 || busctl --user --auto-start=no call dev.aperte.Gextant.Sandbox /dev/aperte/Gextant/Sandbox org.gtk.Actions Activate 'sava{sv}' quit 0 0 || true",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "no_focus",
+    "hide": "on_success"
+  }
+]
