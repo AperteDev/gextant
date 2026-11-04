@@ -6,13 +6,23 @@ use std::path::Path;
 pub struct Extension {
     pub uuid: String,
     pub name: String,
-    /// `version-name` if the extension has one, else `version` (EGO's counter).
-    pub version: Option<String>,
+    /// The author's `version-name`, if any.
+    pub version_name: Option<String>,
+    /// `version`: a counter EGO assigns, not comparable with the upstream's releases.
+    pub counter: Option<u64>,
     /// The `url` of the metadata: the upstream's page, used later to find its repository.
-    #[allow(dead_code)] // ponytail: read by the upstream detection, next
     pub url: Option<String>,
     /// From a system data dir (`/usr/share`), not the user's: not ours to update.
     pub system: bool,
+}
+
+impl Extension {
+    /// What to show: the `version-name`, else the counter.
+    pub fn version(&self) -> Option<String> {
+        self.version_name
+            .clone()
+            .or_else(|| self.counter.map(|c| c.to_string()))
+    }
 }
 
 /// The user's extensions, then the system's. A UUID found twice is listed once, from the first
@@ -47,11 +57,11 @@ fn parse(text: &str, system: bool) -> Option<Extension> {
     let m: serde_json::Value = serde_json::from_str(text).ok()?;
     let str_of = |key: &str| m.get(key)?.as_str().map(str::to_owned);
     let uuid = str_of("uuid")?;
-    let version = str_of("version-name").or_else(|| Some(m.get("version")?.as_u64()?.to_string()));
     Some(Extension {
         name: str_of("name").unwrap_or_else(|| uuid.clone()),
         uuid,
-        version,
+        version_name: str_of("version-name"),
+        counter: m.get("version").and_then(|v| v.as_u64()),
         url: str_of("url"),
         system,
     })
@@ -69,11 +79,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(
-            (e.name.as_str(), e.version.as_deref()),
+            (e.name.as_str(), e.version().as_deref()),
             ("A", Some("1.2.0"))
         );
         let e = parse(r#"{"uuid":"a@b","version":7}"#, true).unwrap();
-        assert_eq!((e.name.as_str(), e.version.as_deref()), ("a@b", Some("7")));
+        assert_eq!(
+            (e.name.as_str(), e.version().as_deref()),
+            ("a@b", Some("7"))
+        );
         assert!(e.system);
     }
 

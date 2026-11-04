@@ -9,16 +9,16 @@ EGO: it covers what they do not.
 
 ### The list
 
-The list already shows the installed extensions (name, UUID, version), the user's and then the
-system's (`/usr/share`, no actions: they cannot be updated by the user). What is left on a row:
+The list shows the installed extensions (name, UUID, version), the user's and then the
+system's (`/usr/share`, no actions: they cannot be updated by the user), and for the user's the
+result of checking GitHub (up to date, update available, latest release when the versions
+cannot be compared, no repository, no releases, failed), on start and from the header's
+refresh button. What is left on a row:
 
-- the latest upstream version found (empty where there is no upstream);
 - a mode, for user extensions: **Off** (not checked), **Check** (the default: look for updates,
-  tell, never install) or **Update** (install new versions by itself);
-- state: up to date, update available (with an **Update** button), no upstream found (with
-  **Set repository…**), no release to install, error (with the reason).
-
-A header button checks again; checking also runs on start.
+  tell, never install) or **Update** (install new versions by itself); today every user
+  extension is in Check;
+- an **Update** button where one is available, and **Set repository…** where none was found.
 
 ### Finding what is installed
 
@@ -45,23 +45,23 @@ In this order, the first that holds:
 3. A project page on `<owner>.github.io/<repo>`: the candidate `github.com/<owner>/<repo>`.
 4. Otherwise: no upstream; the row asks for one.
 
-A candidate is accepted only if what it ships has the same `uuid` in its `metadata.json`. That
-catches a wrong guess, a URL that points at something else, and a repository that was taken
-over. The accepted repository is kept, and a later release naming another `url` never moves it.
+A guess (3) is accepted only if the latest release has a zip named after the extension's UUID
+(`gnome-extensions pack` names it `<uuid>.shell-extension.zip`). Still to do: the same check for
+a repository the user sets, by the downloaded zip's `metadata.json` (see Updating), and keeping
+the accepted repository, so a later release naming another `url` never moves it.
 
 GitHub only in 0.1; the other forges are under [Later](#later).
 
-### Finding the latest version
+### What to install
 
-GitHub's `releases/latest`: the asset named `*.shell-extension.zip` (what `gnome-extensions
-pack` makes) is what gets installed. Without such an asset, the release's source archive if
-its `metadata.json` is at the root (or in a single subfolder). Without releases, the newest
-tag, the same way. Anything else (a repo that needs `make`, meson or npm to produce the
-extension) shows "no release to install"; Gextant does not run build scripts (see
-[Ruled out](#ruled-out)).
+Checking reads GitHub's `releases/latest` (else the first tag). To install, the release's asset
+named `*.shell-extension.zip` is what gets installed. Without such an asset, the release's
+source archive if its `metadata.json` is at the root (or in a single subfolder). Anything else
+(a repo that needs `make`, meson or npm to produce the extension) shows "no release to
+install"; Gextant does not run build scripts (see [Ruled out](#ruled-out)).
 
-Requests are conditional (`ETag`), one per extension, to stay under GitHub's 60 requests an
-hour without a token.
+Requests are not conditional yet; they should be (`ETag`), one per extension, to stay under
+GitHub's 60 requests an hour without a token.
 
 ### Updating
 
@@ -141,8 +141,11 @@ Roughly in this order, each with its own plan when it comes:
   For the rest, candidates: (a) a release published after the extension's files were written
   counts as an update (the files' times are unreliable after a copy or a restore); (b) show
   the latest release and ask once "is this installed?" (**Mark as installed**), which is
-  certain, a little work for the user. Leaning to (b), with (a) as the hint. Where `version-name`
-  looks like the tag (`2.5.0` and `v2.5.0`), compare them directly.
+  certain, a little work for the user. Leaning to (b), with (a) as the hint. Built: where
+  `version-name` looks like the tag (`2.5.0` and `v2.5.0`) they are compared directly, and a
+  tag that is a single number (`v66`) is compared with EGO's counter, which fits 5 of the 13
+  extensions tried (their authors tag EGO's number); wrong for an author who numbers on their
+  own. Tags such as `extensions.gnome.org-v110` are not read.
 - **EGO updates against ours.** The Shell can itself offer updates for extensions installed
   from EGO; its version of the extension could replace ours, even with an older one, as the
   upstream zip's `metadata.json` carries no EGO `version`. To test on a real Shell before

@@ -8,7 +8,13 @@ Adw.ApplicationWindow window {
 
   content: Adw.ToolbarView {
     [top]
-    Adw.HeaderBar {}
+    Adw.HeaderBar {
+      [start]
+      Gtk.Button refresh_button {
+        icon-name: "view-refresh-symbolic";
+        tooltip-text: "Check for Updates";
+      }
+    }
 
     content: Gtk.Stack stack {
       Gtk.StackPage {
