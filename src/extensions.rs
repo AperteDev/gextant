@@ -1,6 +1,7 @@
 //! Finding the installed extensions: every `<data dir>/gnome-shell/extensions/<uuid>/metadata.json`.
 
-use gtk::glib;
+use gtk::prelude::*;
+use gtk::{gio, glib};
 use std::path::Path;
 
 pub struct Extension {
@@ -14,6 +15,23 @@ pub struct Extension {
     pub url: Option<String>,
     /// From a system data dir (`/usr/share`), not the user's: not ours to update.
     pub system: bool,
+}
+
+/// The running GNOME Shell's major version (`51` of `51.1`), from the Extensions service it
+/// offers on the session bus; `None` where there is no Shell to ask.
+pub fn shell_major() -> Option<String> {
+    let proxy = gio::DBusProxy::for_bus_sync(
+        gio::BusType::Session,
+        gio::DBusProxyFlags::NONE,
+        None,
+        "org.gnome.Shell.Extensions",
+        "/org/gnome/Shell/Extensions",
+        "org.gnome.Shell.Extensions",
+        gio::Cancellable::NONE,
+    )
+    .ok()?;
+    let version = proxy.cached_property("ShellVersion")?;
+    Some(version.str()?.split('.').next()?.to_owned())
 }
 
 impl Extension {

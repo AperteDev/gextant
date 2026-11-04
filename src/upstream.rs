@@ -375,6 +375,8 @@ pub enum Source {
     GitLab,
     /// A website, where no repository was found behind it.
     Web,
+    /// extensions.gnome.org, where the upstream said nothing.
+    Ego,
 }
 
 impl Source {
@@ -383,6 +385,7 @@ impl Source {
             Source::GitHub => "gextant-github-symbolic",
             Source::GitLab => "gextant-gitlab-symbolic",
             Source::Web => "gextant-web-symbolic",
+            Source::Ego => "gextant-gnome-symbolic",
         }
     }
 
@@ -391,6 +394,7 @@ impl Source {
             Source::GitHub => "GitHub",
             Source::GitLab => "GitLab",
             Source::Web => "Website",
+            Source::Ego => "GNOME Extensions",
         }
     }
 
@@ -414,6 +418,8 @@ pub enum Found {
     },
     NoRepo(Option<Source>),
     NoRelease(Source),
+    /// The latest version on extensions.gnome.org, when the upstream said nothing.
+    Ego(u64),
 }
 
 impl Found {
@@ -421,12 +427,29 @@ impl Found {
         match self {
             Found::Tag { source, .. } | Found::NoRelease(source) => Some(*source),
             Found::NoRepo(source) => *source,
+            Found::Ego(_) => Some(Source::Ego),
         }
     }
 }
 
-/// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release.
-pub fn find(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Found, Error> {
+/// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release;
+/// where there is none to be had, ask extensions.gnome.org (for GNOME Shell `shell`, if known).
+pub fn find(
+    uuid: &str,
+    url: Option<&str>,
+    token: Option<&str>,
+    shell: Option<&str>,
+) -> Result<Found, Error> {
+    let found = find_upstream(uuid, url, token)?;
+    if let (Found::NoRepo(_) | Found::NoRelease(_), Some(shell)) = (&found, shell)
+        && let Ok(Some(version)) = crate::ego::latest(uuid, shell)
+    {
+        return Ok(Found::Ego(version));
+    }
+    Ok(found)
+}
+
+fn find_upstream(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Found, Error> {
     let Some(url) = url else {
         return Ok(Found::NoRepo(None));
     };
@@ -465,6 +488,14 @@ pub fn outcome(
         Ok(Found::Tag { tag: latest, .. }) => Outcome::Checked {
             version: compare(version_name, counter, &latest),
             latest,
+        },
+        Ok(Found::Ego(latest)) => Outcome::Checked {
+            version: match counter {
+                Some(have) if latest > have => Version::Newer,
+                Some(_) => Version::Same,
+                None => Version::Unknown,
+            },
+            latest: latest.to_string(),
         },
         Ok(Found::NoRepo(_)) | Err(Error::Missing) => Outcome::NoRepo,
         Ok(Found::NoRelease(_)) => Outcome::NoRelease,
@@ -560,6 +591,18 @@ mod tests {
             uuid
         ));
         assert!(!ships(["nightthemeswitcher.tar.gz", "other.zip"], uuid));
+    }
+
+    #[test]
+    fn the_portal_is_compared_by_counter() {
+        let v = |counter, latest| match outcome(Ok(Found::Ego(latest)), None, counter) {
+            Outcome::Checked { version, .. } => version,
+            _ => panic!("not checked"),
+        };
+        assert_eq!(v(Some(13), 13), Version::Same);
+        assert_eq!(v(Some(12), 13), Version::Newer);
+        assert_eq!(v(Some(14), 13), Version::Same);
+        assert_eq!(v(None, 13), Version::Unknown);
     }
 
     #[test]

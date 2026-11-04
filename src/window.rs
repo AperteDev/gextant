@@ -62,6 +62,8 @@ struct Checker {
     /// Counts the runs: a result from an older one (the token changed meanwhile) is dropped.
     run: Cell<u32>,
     cache: RefCell<Cache>,
+    /// The running Shell's major version, for extensions.gnome.org.
+    shell: Option<String>,
 }
 
 pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
@@ -134,6 +136,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         token_banner: object("token_banner").downcast().unwrap(),
         run: Cell::new(0),
         cache: RefCell::new(Cache::load()),
+        shell: extensions::shell_major(),
     });
     button.connect_clicked({
         let checker = checker.clone();
@@ -216,10 +219,13 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
         let (row, checker, pending) = (r.clone(), checker.clone(), pending.clone());
         glib::spawn_future_local(async move {
             let have_token = token.is_some();
-            let (u, url2) = (uuid.clone(), url.clone());
+            let (u, url2, shell) = (uuid.clone(), url.clone(), checker.shell.clone());
             let (found, fresh) = gio::spawn_blocking(move || match cached {
                 Some(found) => (Ok(found), false),
-                None => (upstream::find(&u, url2.as_deref(), token.as_deref()), true),
+                None => (
+                    upstream::find(&u, url2.as_deref(), token.as_deref(), shell.as_deref()),
+                    true,
+                ),
             })
             .await
             .unwrap_or_else(|_| {
