@@ -119,21 +119,43 @@ pub fn latest(
     }
 }
 
+/// GET from the API with the token, `None` for 404. A moved repository answers 301 to its
+/// numeric URL: followed here, as the HTTP client drops the token on a redirect (and the
+/// anonymous request that follows is limited to 60 an hour).
+fn api_get(mut url: String, token: &str) -> Result<Option<Value>, Error> {
+    for _ in 0..3 {
+        let r = AGENT
+            .get(&url)
+            .config()
+            .max_redirects(0)
+            .max_redirects_will_error(false)
+            .build()
+            .header("Accept", "application/vnd.github+json")
+            .header("Authorization", format!("Bearer {token}"))
+            .call()?;
+        let to = r.headers().get("location").and_then(|l| l.to_str().ok());
+        if let (301 | 302 | 307 | 308, Some(to)) = (r.status().as_u16(), to)
+            && to.starts_with("https://api.github.com/")
+        {
+            url = to.to_owned();
+            continue;
+        }
+        return read(r)?
+            .map(|t| serde_json::from_str(&t).map_err(|e| Error::Other(e.to_string())))
+            .transpose();
+    }
+    Err(Error::Other("Too many redirects".into()))
+}
+
 /// ponytail: GitHub lists tags by name, not by date; a repo whose newest tag sorts low is
 /// misread; pick by version number if it shows up.
 fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Release>, Error> {
     let Repo { owner, name } = repo;
-    let api = |path: &str| -> Result<Option<Value>, Error> {
-        let r = AGENT
-            .get(format!(
-                "https://api.github.com/repos/{owner}/{name}/{path}"
-            ))
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {token}"))
-            .call()?;
-        read(r)?
-            .map(|t| serde_json::from_str(&t).map_err(|e| Error::Other(e.to_string())))
-            .transpose()
+    let api = |path: &str| {
+        api_get(
+            format!("https://api.github.com/repos/{owner}/{name}/{path}"),
+            token,
+        )
     };
     if let Some(r) = api("releases/latest")? {
         let mut assets = r["assets"].as_array().into_iter().flatten();
