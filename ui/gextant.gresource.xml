@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<gresources>
+  <gresource prefix="/dev/aperte/Gextant">
+    <file>window.ui</file>
+  </gresource>
+  <gresource prefix="/dev/aperte/Gextant/icons/scalable/apps">
+    <file>dev.aperte.Gextant.svg</file>
+  </gresource>
+</gresources>

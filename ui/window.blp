@@ -1,0 +1,19 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.ApplicationWindow window {
+  default-width: 640;
+  default-height: 720;
+  title: "Gextant";
+
+  content: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Adw.StatusPage {
+      icon-name: "dev.aperte.Gextant";
+      title: "Gextant";
+      description: "Keeps your GNOME extensions up to date, straight from their repositories.";
+    };
+  };
+}
