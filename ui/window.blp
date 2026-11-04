@@ -10,10 +10,30 @@ Adw.ApplicationWindow window {
     [top]
     Adw.HeaderBar {}
 
-    content: Adw.StatusPage {
-      icon-name: "dev.aperte.Gextant";
-      title: "Gextant";
-      description: "Keeps your GNOME extensions up to date, straight from their repositories.";
+    content: Gtk.Stack stack {
+      Gtk.StackPage {
+        name: "empty";
+
+        child: Adw.StatusPage {
+          icon-name: "dev.aperte.Gextant";
+          title: "No Extensions Installed";
+          description: "Keeps your GNOME extensions up to date, straight from their repositories.";
+        };
+      }
+
+      Gtk.StackPage {
+        name: "list";
+
+        child: Adw.PreferencesPage {
+          Adw.PreferencesGroup user_group {
+            title: "User-Installed Extensions";
+          }
+
+          Adw.PreferencesGroup system_group {
+            title: "System Extensions";
+          }
+        };
+      }
     };
   };
 }

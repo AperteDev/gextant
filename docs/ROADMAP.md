@@ -9,18 +9,16 @@ EGO: it covers what they do not.
 
 ### The list
 
-One window with a list in the style of the Extensions app's "User-Installed Extensions". A row:
+The list already shows the installed extensions (name, UUID, version), the user's and then the
+system's (`/usr/share`, no actions: they cannot be updated by the user). What is left on a row:
 
-- name, and the UUID under it;
-- installed version and the latest upstream version found (empty where there is no upstream);
-- a mode: **Off** (not checked), **Check** (the default: look for updates, tell, never install)
-  or **Update** (install new versions by itself);
+- the latest upstream version found (empty where there is no upstream);
+- a mode, for user extensions: **Off** (not checked), **Check** (the default: look for updates,
+  tell, never install) or **Update** (install new versions by itself);
 - state: up to date, update available (with an **Update** button), no upstream found (with
   **Set repository…**), no release to install, error (with the reason).
 
-Only user-installed extensions are listed (`$XDG_DATA_HOME/gnome-shell/extensions/`): the system
-ones in `/usr/share/gnome-shell/extensions` cannot be updated by the user. A header button
-checks again; checking also runs on start.
+A header button checks again; checking also runs on start.
 
 ### Finding what is installed
 

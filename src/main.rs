@@ -1,5 +1,8 @@
 //! Gextant: updates GNOME Shell extensions straight from their upstream repositories.
 
+mod extensions;
+mod window;
+
 use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 
@@ -23,11 +26,6 @@ fn main() -> glib::ExitCode {
         app.add_action_entries([quit]);
         app.set_accels_for_action("app.quit", &["<Control>q"]);
     });
-    app.connect_activate(|app| {
-        let ui = gtk::Builder::from_resource("/dev/aperte/Gextant/window.ui");
-        let window: adw::ApplicationWindow = ui.object("window").expect("window in window.blp");
-        window.set_application(Some(app));
-        window.present();
-    });
+    app.connect_activate(|app| window::build(app).present());
     app.run()
 }

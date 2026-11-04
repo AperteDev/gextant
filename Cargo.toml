@@ -8,3 +8,4 @@ description = "Updates GNOME Shell extensions straight from their upstream repos
 [dependencies]
 adw = { version = "0.9.2", package = "libadwaita", features = ["v1_7"] }
 gtk = { version = "0.11.5", package = "gtk4", features = ["v4_14"] }
+serde_json = "1.0.154"
