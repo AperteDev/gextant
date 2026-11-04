@@ -1,7 +1,8 @@
 //! What the last checks found, kept for a few hours so a start does not ask the forges about every
 //! extension again. In the cache folder, so it can be deleted any time; a failure is never kept.
 
-use crate::upstream::Found;
+use crate::check::Found;
+use crate::upstream::Upstream;
 use gtk::glib;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -13,8 +14,8 @@ const HOUR: u64 = 3600;
 /// How long a result stays good: a missing repository is looked for again less often (it costs
 /// a project page each time), a release more often, as that is what changes.
 fn lifetime(found: &Found) -> u64 {
-    match found {
-        Found::NoRepo(_) => 24 * HOUR,
+    match found.upstream {
+        Upstream::NoRepo(_) => 24 * HOUR,
         _ => 6 * HOUR,
     }
 }
@@ -90,11 +91,18 @@ mod tests {
     use super::*;
     use crate::upstream::Source;
 
+    fn found(upstream: Upstream) -> Found {
+        Found {
+            upstream,
+            ego: Some(7),
+        }
+    }
+
     fn tag(t: &str) -> Found {
-        Found::Tag {
+        found(Upstream::Tag {
             tag: t.into(),
             source: Source::GitHub,
-        }
+        })
     }
 
     #[test]
@@ -105,21 +113,24 @@ mod tests {
         assert_eq!(c.get(u, url, 1000 + 6 * HOUR - 1), Some(tag("v1")));
         assert_eq!(c.get(u, url, 1000 + 6 * HOUR), None);
         assert_eq!(c.get(u, Some("https://github.com/o/other"), 1000), None);
-        c.put(u, None, Found::NoRepo(None), 1000);
-        assert_eq!(c.get(u, None, 1000 + 23 * HOUR), Some(Found::NoRepo(None)));
+        c.put(u, None, found(Upstream::NoRepo(None)), 1000);
+        assert_eq!(
+            c.get(u, None, 1000 + 23 * HOUR),
+            Some(found(Upstream::NoRepo(None)))
+        );
         assert_eq!(c.get(u, None, 1000 + 24 * HOUR), None);
     }
 
     #[test]
     fn survives_a_round_trip_and_forgets_removed_extensions() {
         let mut c = Cache::default();
-        c.put("a@b", None, Found::NoRelease(Source::GitLab), 5);
+        c.put("a@b", None, found(Upstream::NoRelease(Source::GitLab)), 5);
         c.put("c@d", None, tag("2"), 5);
         c.retain(&["a@b"]);
         let back: Cache = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
         assert_eq!(
             back.get("a@b", None, 6),
-            Some(Found::NoRelease(Source::GitLab))
+            Some(found(Upstream::NoRelease(Source::GitLab)))
         );
         assert_eq!(back.get("c@d", None, 6), None);
     }

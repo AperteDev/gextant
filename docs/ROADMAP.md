@@ -10,12 +10,15 @@ EGO: it covers what they do not.
 ### The list
 
 The list shows the installed extensions (name, UUID, version), the user's and then the
-system's (`/usr/share`, no actions: they cannot be updated by the user), and for the user's the
-result of checking GitHub (up to date, update available, latest release when the versions
-cannot be compared, no repository, no releases, failed), on start and from the header's
-refresh button. An icon beside the version says where the code was found (GitHub, GitLab, a
-website where no repository was found), and an up-to-date version is shown green, with no
-text. The GNOME mark means the answer came from extensions.gnome.org (below). What is left on a row:
+system's (`/usr/share`, no actions: they cannot be updated by the user), and for the user's what
+two separate checks found, on start and from the header's refresh button: the upstream (GitHub
+or GitLab) and extensions.gnome.org (EGO). Each shows as its latest version with its icon, the
+icon coloured as the version is. Sources that agree make one chip with two icons; those that
+differ sit side by side with their own versions. Green: what is installed is current for that
+source; yellow: that source has something newer; grey: the two cannot be compared. The
+installed version is shown by itself only where no chip has it. Where there is no version to
+show, a word says why (no repository, no releases, rate limit reached, check failed). What is
+left on a row:
 
 - a mode, for user extensions: **Off** (not checked), **Check** (the default: look for updates,
   tell, never install) or **Update** (install new versions by itself); today every user
@@ -50,13 +53,12 @@ In this order, the first that holds:
    the first megabyte) and the first three repositories it links to are the candidates.
 5. Otherwise: no upstream; the row asks for one.
 
-Where the upstream says nothing (no repository, no releases, no `url`), extensions.gnome.org
-(EGO) is asked, for the running Shell's major version (from the Extensions service on D-Bus):
-`extension-info/?uuid=<uuid>&shell_version=<major>`, public JSON with no key. Its `version` is
-the counter in `metadata.json`, so this comparison is exact. It is only a fallback: the point
-is to get updates sooner than the portal's review gives them, so the upstream comes first. Not
-built: showing what EGO has beside an upstream answer (to tell when the portal is behind),
-and EGO's `url` as an upstream for extensions whose metadata has none.
+EGO is asked as well, always and at the same time, for the running Shell's major version (from
+the Extensions service on D-Bus): `extension-info/?uuid=<uuid>&shell_version=<major>`, public
+JSON with no key. Its `version` is the counter in `metadata.json`, so that comparison is exact,
+and it shows when the portal is behind the repository, the reason for this app. Each check
+fails or answers on its own; only when both worked is the result kept. Not built: EGO's `url`
+as an upstream for extensions whose metadata has none.
 
 A guess (3, 4) is accepted only if the latest release has a zip named after the extension: its
 UUID, or what is before the `@` (`gnome-extensions pack` names it `<uuid>.shell-extension.zip`;

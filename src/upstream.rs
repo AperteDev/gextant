@@ -302,7 +302,7 @@ pub(crate) fn first_tag(feed: &str) -> Option<String> {
     Some(title[..title.find("</title>")?].trim().to_owned())
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Version {
     Same,
     Newer,
@@ -356,18 +356,6 @@ pub fn compare(version_name: Option<&str>, counter: Option<u64>, tag: &str) -> V
     }
 }
 
-pub enum Outcome {
-    /// `latest`: the release's tag.
-    Checked {
-        latest: String,
-        version: Version,
-    },
-    NoRepo,
-    NoRelease,
-    RateLimited,
-    Failed(String),
-}
-
 /// Where an extension's code is looked for: what the row's icon shows.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Source {
@@ -398,7 +386,7 @@ impl Source {
         }
     }
 
-    fn of(repo: &Repo) -> Self {
+    pub(crate) fn of(repo: &Repo) -> Self {
         if repo.host == "github.com" {
             Source::GitHub
         } else {
@@ -407,10 +395,9 @@ impl Source {
     }
 }
 
-/// What looking for an extension's upstream found: the part worth keeping between runs (what is
-/// installed is compared again each time).
+/// What the upstream (a repository) has: the part worth keeping between runs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub enum Found {
+pub enum Upstream {
     /// The tag of the latest release (or of the newest tag).
     Tag {
         tag: String,
@@ -418,40 +405,12 @@ pub enum Found {
     },
     NoRepo(Option<Source>),
     NoRelease(Source),
-    /// The latest version on extensions.gnome.org, when the upstream said nothing.
-    Ego(u64),
 }
 
-impl Found {
-    pub fn source(&self) -> Option<Source> {
-        match self {
-            Found::Tag { source, .. } | Found::NoRelease(source) => Some(*source),
-            Found::NoRepo(source) => *source,
-            Found::Ego(_) => Some(Source::Ego),
-        }
-    }
-}
-
-/// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release;
-/// where there is none to be had, ask extensions.gnome.org (for GNOME Shell `shell`, if known).
-pub fn find(
-    uuid: &str,
-    url: Option<&str>,
-    token: Option<&str>,
-    shell: Option<&str>,
-) -> Result<Found, Error> {
-    let found = find_upstream(uuid, url, token)?;
-    if let (Found::NoRepo(_) | Found::NoRelease(_), Some(shell)) = (&found, shell)
-        && let Ok(Some(version)) = crate::ego::latest(uuid, shell)
-    {
-        return Ok(Found::Ego(version));
-    }
-    Ok(found)
-}
-
-fn find_upstream(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Found, Error> {
+/// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release.
+pub fn find(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Upstream, Error> {
     let Some(url) = url else {
-        return Ok(Found::NoRepo(None));
+        return Ok(Upstream::NoRepo(None));
     };
     // A `url` that is not a repository may be a project page that links to it. Such a guess
     // counts only if the release ships this extension.
@@ -459,15 +418,15 @@ fn find_upstream(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<F
         Some(found) => vec![found],
         None => discover(url).into_iter().map(|r| (r, true)).collect(),
     };
-    let mut result = Ok(Found::NoRepo(Some(Source::Web)));
+    let mut result = Ok(Upstream::NoRepo(Some(Source::Web)));
     for (repo, guessed) in candidates {
         match latest(&repo, token, guessed.then_some(uuid)) {
             Err(Error::RateLimited) => return Err(Error::RateLimited),
             Err(Error::Missing) => {}
             Err(e) => result = Err(e),
-            Ok(None) if !guessed => result = Ok(Found::NoRelease(Source::of(&repo))),
+            Ok(None) if !guessed => result = Ok(Upstream::NoRelease(Source::of(&repo))),
             Ok(Some(r)) if !guessed || r.ships => {
-                return Ok(Found::Tag {
+                return Ok(Upstream::Tag {
                     tag: r.tag,
                     source: Source::of(&repo),
                 });
@@ -478,29 +437,21 @@ fn find_upstream(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<F
     result
 }
 
-/// What to show for what was found, against what is installed.
-pub fn outcome(
-    found: Result<Found, Error>,
-    version_name: Option<&str>,
-    counter: Option<u64>,
-) -> Outcome {
-    match found {
-        Ok(Found::Tag { tag: latest, .. }) => Outcome::Checked {
-            version: compare(version_name, counter, &latest),
-            latest,
-        },
-        Ok(Found::Ego(latest)) => Outcome::Checked {
-            version: match counter {
-                Some(have) if latest > have => Version::Newer,
-                Some(_) => Version::Same,
-                None => Version::Unknown,
-            },
-            latest: latest.to_string(),
-        },
-        Ok(Found::NoRepo(_)) | Err(Error::Missing) => Outcome::NoRepo,
-        Ok(Found::NoRelease(_)) => Outcome::NoRelease,
-        Err(Error::RateLimited) => Outcome::RateLimited,
-        Err(Error::Other(e)) => Outcome::Failed(e),
+/// A tag as the version it is: without a leading `v`; and, for an extension that has only EGO's
+/// counter, the number the tag carries (`extensions.gnome.org-v110` is `110`).
+pub fn display_version(tag: &str, version_name: Option<&str>, counter: Option<u64>) -> String {
+    match ego_number(tag) {
+        Some(n) if version_name.is_none() && counter.is_some() => n.to_string(),
+        _ => tag.strip_prefix(['v', 'V']).unwrap_or(tag).to_owned(),
+    }
+}
+
+/// EGO's `latest` version against the installed counter.
+pub fn compare_counter(counter: Option<u64>, latest: u64) -> Version {
+    match counter {
+        Some(have) if latest > have => Version::Newer,
+        Some(_) => Version::Same,
+        None => Version::Unknown,
     }
 }
 
@@ -595,14 +546,19 @@ mod tests {
 
     #[test]
     fn the_portal_is_compared_by_counter() {
-        let v = |counter, latest| match outcome(Ok(Found::Ego(latest)), None, counter) {
-            Outcome::Checked { version, .. } => version,
-            _ => panic!("not checked"),
-        };
-        assert_eq!(v(Some(13), 13), Version::Same);
-        assert_eq!(v(Some(12), 13), Version::Newer);
-        assert_eq!(v(Some(14), 13), Version::Same);
-        assert_eq!(v(None, 13), Version::Unknown);
+        assert_eq!(compare_counter(Some(13), 13), Version::Same);
+        assert_eq!(compare_counter(Some(12), 13), Version::Newer);
+        assert_eq!(compare_counter(Some(14), 13), Version::Same);
+        assert_eq!(compare_counter(None, 13), Version::Unknown);
+    }
+
+    #[test]
+    fn tags_show_as_versions() {
+        let d = display_version;
+        assert_eq!(d("v2.5.0", Some("2.5.0"), None), "2.5.0");
+        assert_eq!(d("extensions.gnome.org-v110", None, Some(110)), "110");
+        assert_eq!(d("2.2.0+10", None, Some(9)), "10");
+        assert_eq!(d("v1.2.0", None, Some(9)), "1.2.0");
     }
 
     #[test]

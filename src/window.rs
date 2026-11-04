@@ -2,8 +2,9 @@
 //! user's have upstream.
 
 use crate::cache::{self, Cache};
+use crate::check::{self, Checks, Chip, Found, View};
 use crate::extensions::{self, Extension};
-use crate::upstream::{self, Found, Outcome, Source, Version};
+use crate::upstream::{self, Version};
 use crate::{preferences, token};
 use adw::prelude::*;
 use gtk::{gio, glib};
@@ -17,38 +18,76 @@ struct Checked {
     version_name: Option<String>,
     counter: Option<u64>,
     url: Option<String>,
-    /// Beside the version: where its code was found, and what it found, unless that is "up to
-    /// date", which turns the version itself green.
-    icon: gtk::Image,
-    version: gtk::Label,
-    status: gtk::Label,
+    /// Holds what the checks found, rebuilt with each result.
+    holder: gtk::Box,
 }
 
 impl Checked {
-    fn show(&self, text: &str, class: &str, tooltip: Option<&str>, source: Option<Source>) {
-        let up_to_date = class == "success";
-        let version = self.version.text();
-        // An extension without a version has nothing to turn green: say it in words.
-        let (text, class) = if up_to_date && !version.is_empty() {
-            ("", "dim-label")
-        } else {
-            (text, class)
-        };
-        self.status.set_visible(!text.is_empty());
-        show(&self.status, text, class, tooltip);
-        self.version
-            .set_css_classes(&[if up_to_date { "success" } else { "dim-label" }]);
-        self.version.set_tooltip_text(Some(&if up_to_date {
-            format!("{version}\nUp to date")
-        } else {
-            version.to_string()
-        }));
-        self.icon.set_visible(source.is_some());
-        if let Some(source) = source {
-            self.icon.set_icon_name(Some(source.icon()));
-            self.icon.set_tooltip_text(Some(source.name()));
+    fn loading(&self) {
+        self.clear();
+        self.holder.append(&label("Checking…", "dim-label", None));
+    }
+
+    fn clear(&self) {
+        while let Some(child) = self.holder.first_child() {
+            self.holder.remove(&child);
         }
     }
+
+    /// The installed version if no chip has it, a chip per version found (with the icons of the
+    /// sources that have it), and what is to be said where a check has none.
+    fn render(&self, view: View) {
+        self.clear();
+        if let Some(installed) = view.installed {
+            self.holder
+                .append(&label(&installed, "dim-label", Some("Installed")));
+        }
+        for chip in &view.chips {
+            self.holder.append(&chip_widget(chip));
+        }
+        if let Some(note) = view.note {
+            self.holder
+                .append(&label(note.text, note.class, note.tip.as_deref()));
+        }
+    }
+}
+
+fn label(text: &str, class: &str, tip: Option<&str>) -> gtk::Label {
+    gtk::Label::builder()
+        .label(text)
+        .css_classes([class])
+        .ellipsize(gtk::pango::EllipsizeMode::End)
+        .max_width_chars(24)
+        .tooltip_text(tip.unwrap_or_default())
+        .valign(gtk::Align::Center)
+        .build()
+}
+
+/// A version with the icons of its sources, in the colour of how it stands against what is
+/// installed: green if that is up to date, yellow if the version is newer, grey if the two cannot
+/// be compared.
+fn chip_widget(chip: &Chip) -> gtk::Box {
+    let class = match chip.state {
+        Version::Same => "success",
+        Version::Newer => "warning",
+        Version::Unknown => "dim-label",
+    };
+    let widget = gtk::Box::builder()
+        .spacing(4)
+        .valign(gtk::Align::Center)
+        .tooltip_text(&chip.tip)
+        .build();
+    for (source, _) in &chip.sources {
+        widget.append(
+            &gtk::Image::builder()
+                .icon_name(source.icon())
+                .pixel_size(16)
+                .css_classes([class])
+                .build(),
+        );
+    }
+    widget.append(&label(&chip.version, class, None));
+    widget
 }
 
 /// What checking needs: the rows, the button that waits for the checks and the banner for the
@@ -93,33 +132,21 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         group.set_visible(rows.peek().is_some());
         for e in rows {
             let row = row(e);
-            let version = version_label(e);
-            if !system {
-                let icon = gtk::Image::builder()
-                    .pixel_size(16)
-                    .css_classes(["dim-label"])
+            if *system {
+                row.add_suffix(&version_label(e));
+            } else {
+                let holder = gtk::Box::builder()
+                    .spacing(8)
                     .valign(gtk::Align::Center)
-                    .visible(false)
                     .build();
-                let status = gtk::Label::builder()
-                    .valign(gtk::Align::Center)
-                    .ellipsize(gtk::pango::EllipsizeMode::End)
-                    .max_width_chars(24)
-                    .build();
-                row.add_suffix(&icon);
-                row.add_suffix(&version);
-                row.add_suffix(&status);
+                row.add_suffix(&holder);
                 checked.push(Checked {
                     uuid: e.uuid.clone(),
                     version_name: e.version_name.clone(),
                     counter: e.counter,
                     url: e.url.clone(),
-                    icon,
-                    version,
-                    status,
+                    holder,
                 });
-            } else {
-                row.add_suffix(&version);
             }
             group.add(&row);
         }
@@ -212,76 +239,54 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
     let pending = Rc::new(Cell::new(checker.rows.len()));
     for (r, cached) in checker.rows.iter().zip(cached) {
         if cached.is_none() {
-            r.show("Checking…", "dim-label", None, None);
+            r.loading();
         }
-        let (uuid, version_name, url) = (r.uuid.clone(), r.version_name.clone(), r.url.clone());
-        let (counter, token) = (r.counter, token.clone());
+        let (uuid, url) = (r.uuid.clone(), r.url.clone());
+        let token = token.clone();
         let (row, checker, pending) = (r.clone(), checker.clone(), pending.clone());
         glib::spawn_future_local(async move {
             let have_token = token.is_some();
             let (u, url2, shell) = (uuid.clone(), url.clone(), checker.shell.clone());
-            let (found, fresh) = gio::spawn_blocking(move || match cached {
-                Some(found) => (Ok(found), false),
+            let (checks, fresh) = gio::spawn_blocking(move || match cached {
+                Some(found) => (Checks::from_found(found), false),
                 None => (
-                    upstream::find(&u, url2.as_deref(), token.as_deref(), shell.as_deref()),
+                    check::run(&u, url2.as_deref(), token.as_deref(), shell.as_deref()),
                     true,
                 ),
             })
             .await
             .unwrap_or_else(|_| {
+                let crashed = || upstream::Error::Other("The check crashed".into());
                 (
-                    Err(upstream::Error::Other("The check crashed".into())),
+                    Checks {
+                        upstream: Err(crashed()),
+                        ego: Err(crashed()),
+                    },
                     false,
                 )
             });
             if checker.run.get() != run {
                 return;
             }
-            if let (Ok(found), true) = (&found, fresh) {
+            if let (Some(found), true) = (checks.found(), fresh) {
                 checker
                     .cache
                     .borrow_mut()
-                    .put(&uuid, url.as_deref(), found.clone(), now);
+                    .put(&uuid, url.as_deref(), found, now);
             }
-            let source = found.as_ref().ok().and_then(Found::source);
-            match upstream::outcome(found, version_name.as_deref(), counter) {
-                Outcome::Checked {
-                    latest,
-                    version: Version::Newer,
-                } => row.show(
-                    &format!("Update available: {latest}"),
-                    "accent",
-                    None,
-                    source,
-                ),
-                Outcome::Checked {
-                    version: Version::Same,
-                    ..
-                } => row.show("Up to date", "success", None, source),
-                Outcome::Checked {
-                    latest,
-                    version: Version::Unknown,
-                } => row.show(
-                    &format!("Latest: {latest}"),
-                    "dim-label",
-                    Some(&format!(
-                        "Latest release: {latest}\nThe installed version cannot be compared with it"
-                    )),
-                    source,
-                ),
-                Outcome::NoRepo => row.show("No repository found", "dim-label", None, source),
-                Outcome::NoRelease => row.show("No releases", "dim-label", None, source),
-                Outcome::RateLimited => {
-                    row.show("Rate limit reached", "warning", None, None);
-                    checker.banner.set_title(if have_token {
-                        "GitHub's rate limit is used up. Try again later."
-                    } else {
-                        "GitHub's rate limit is used up. An access token raises it."
-                    });
-                    checker.banner.set_revealed(true);
-                }
-                Outcome::Failed(e) => row.show("Check failed", "error", Some(&e), None),
+            if checks.rate_limited() {
+                checker.banner.set_title(if have_token {
+                    "GitHub's rate limit is used up. Try again later."
+                } else {
+                    "GitHub's rate limit is used up. An access token raises it."
+                });
+                checker.banner.set_revealed(true);
             }
+            row.render(check::view(
+                &checks,
+                row.version_name.as_deref(),
+                row.counter,
+            ));
             pending.set(pending.get() - 1);
             if pending.get() == 0 {
                 checker.button.set_sensitive(true);
@@ -292,10 +297,4 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
             }
         });
     }
-}
-
-fn show(label: &gtk::Label, text: &str, class: &str, tooltip: Option<&str>) {
-    label.set_label(text);
-    label.set_css_classes(&[class]);
-    label.set_tooltip_text(tooltip);
 }
