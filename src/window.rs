@@ -6,7 +6,7 @@ use crate::check::{self, Checks, Chip, Found, View, abbreviate};
 use crate::extensions::{self, Extension};
 use crate::token::Tokens;
 use crate::upstream::{self, Version};
-use crate::{gitlab, preferences};
+use crate::{details, gitlab, preferences};
 use adw::prelude::*;
 use gtk::{gio, glib};
 use std::cell::{Cell, RefCell};
@@ -21,6 +21,8 @@ struct Checked {
     url: Option<String>,
     /// Holds what the checks found, rebuilt with each result.
     holder: gtk::Box,
+    /// What the last check showed, for the details.
+    view: Rc<RefCell<Option<View>>>,
 }
 
 impl Checked {
@@ -39,12 +41,13 @@ impl Checked {
     /// sources that have it), and what is to be said where a check has none.
     fn render(&self, view: View) {
         self.clear();
-        if let Some(installed) = view.installed {
-            self.holder.append(&installed_widget(&installed));
+        if let Some(installed) = &view.installed {
+            self.holder.append(&installed_widget(installed));
         }
         for chip in &view.chips {
             self.holder.append(&chip_widget(chip));
         }
+        *self.view.borrow_mut() = Some(view);
     }
 }
 
@@ -153,6 +156,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         group.set_visible(rows.peek().is_some());
         for e in rows {
             let row = row(e);
+            let view = Rc::new(RefCell::new(None));
             if let Some(shell) = shell.as_deref().filter(|s| !e.supports(s)) {
                 row.add_prefix(&incompatible_icon(e, shell));
             }
@@ -170,8 +174,15 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
                     counter: e.counter,
                     url: e.url.clone(),
                     holder,
+                    view: view.clone(),
                 });
             }
+            row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+            row.set_activatable(true);
+            row.connect_activated({
+                let (window, e, shell) = (window.clone(), e.clone(), shell.clone());
+                move |_| details::present(&window, &e, shell.as_deref(), view.borrow().as_ref())
+            });
             group.add(&row);
         }
     }

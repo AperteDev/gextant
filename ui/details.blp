@@ -1,0 +1,29 @@
+using Gtk 4.0;
+using Adw 1;
+
+Adw.Dialog dialog {
+  content-width: 560;
+  content-height: 680;
+
+  child: Adw.ToolbarView {
+    [top]
+    Adw.HeaderBar {}
+
+    content: Adw.PreferencesPage {
+      Adw.PreferencesGroup info_group {}
+
+      Adw.PreferencesGroup shell_group {
+        title: "GNOME Shell";
+      }
+
+      Adw.PreferencesGroup source_group {
+        title: "Source";
+      }
+
+      Adw.PreferencesGroup metadata_group {
+        title: "Other Metadata";
+        description: "What else the extension's metadata.json says.";
+      }
+    };
+  };
+}

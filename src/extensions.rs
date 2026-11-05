@@ -2,8 +2,10 @@
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+#[derive(Clone)]
 pub struct Extension {
     pub uuid: String,
     pub name: String,
@@ -15,6 +17,10 @@ pub struct Extension {
     pub url: Option<String>,
     /// `shell-version`: the GNOME Shell versions it says it supports; empty if it names none.
     pub shell_versions: Vec<String>,
+    /// The extension's folder.
+    pub path: PathBuf,
+    /// The whole `metadata.json`, for the details.
+    pub metadata: serde_json::Map<String, serde_json::Value>,
     /// From a system data dir (`/usr/share`), not the user's: not ours to update.
     pub system: bool,
 }
@@ -22,7 +28,12 @@ pub struct Extension {
 /// The running GNOME Shell's major version (`51` of `51.1`), from the Extensions service it
 /// offers on the session bus; `None` where there is no Shell to ask.
 pub fn shell_major() -> Option<String> {
-    let proxy = gio::DBusProxy::for_bus_sync(
+    let version = shell_proxy()?.cached_property("ShellVersion")?;
+    Some(version.str()?.split('.').next()?.to_owned())
+}
+
+fn shell_proxy() -> Option<gio::DBusProxy> {
+    gio::DBusProxy::for_bus_sync(
         gio::BusType::Session,
         gio::DBusProxyFlags::NONE,
         None,
@@ -31,9 +42,39 @@ pub fn shell_major() -> Option<String> {
         "org.gnome.Shell.Extensions",
         gio::Cancellable::NONE,
     )
-    .ok()?;
-    let version = proxy.cached_property("ShellVersion")?;
-    Some(version.str()?.split('.').next()?.to_owned())
+    .ok()
+}
+
+/// What the running Shell says of an extension it has loaded.
+pub struct ShellInfo {
+    /// The Shell's `ExtensionState`: 1 active, 2 inactive, 3 error, 4 out of date, …
+    pub state: u32,
+    pub error: String,
+    pub has_prefs: bool,
+}
+
+/// Ask the Shell (`ListExtensions`) about `e`. `None` where there is no Shell to ask, or it
+/// knows another copy of the UUID (the system's, say): the folder is compared.
+pub fn shell_info(e: &Extension) -> Option<ShellInfo> {
+    let all = shell_proxy()?
+        .call_sync(
+            "ListExtensions",
+            None,
+            gio::DBusCallFlags::NONE,
+            2000,
+            gio::Cancellable::NONE,
+        )
+        .ok()?;
+    let all: HashMap<String, HashMap<String, glib::Variant>> = all.child_value(0).get()?;
+    let m = all.get(&e.uuid)?;
+    if m.get("path")?.str()? != e.path.to_str()? {
+        return None;
+    }
+    Some(ShellInfo {
+        state: m.get("state")?.get::<f64>()? as u32,
+        error: m.get("error")?.str()?.to_owned(),
+        has_prefs: m.get("hasPrefs")?.get()?,
+    })
 }
 
 impl Extension {
@@ -100,11 +141,15 @@ pub fn installed() -> Vec<Extension> {
 /// The extension in folder `dir`; none if it has no readable `metadata.json` with a `uuid`.
 fn read(dir: &Path, system: bool) -> Option<Extension> {
     let text = std::fs::read_to_string(dir.join("metadata.json")).ok()?;
-    parse(&text, system)
+    let mut ext = parse(&text, system)?;
+    ext.path = dir.to_owned();
+    Some(ext)
 }
 
 fn parse(text: &str, system: bool) -> Option<Extension> {
-    let m: serde_json::Value = serde_json::from_str(text).ok()?;
+    let serde_json::Value::Object(m) = serde_json::from_str(text).ok()? else {
+        return None;
+    };
     let str_of = |key: &str| m.get(key)?.as_str().map(str::to_owned);
     let uuid = str_of("uuid")?;
     Some(Extension {
@@ -122,6 +167,8 @@ fn parse(text: &str, system: bool) -> Option<Extension> {
                     .collect()
             })
             .unwrap_or_default(),
+        path: PathBuf::new(),
+        metadata: m,
         system,
     })
 }

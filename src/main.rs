@@ -3,6 +3,7 @@
 mod about;
 mod cache;
 mod check;
+mod details;
 mod ego;
 mod extensions;
 mod gitlab;

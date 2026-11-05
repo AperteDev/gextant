@@ -3,6 +3,7 @@
   <gresource prefix="/dev/aperte/Gextant">
     <file>window.ui</file>
     <file>preferences.ui</file>
+    <file>details.ui</file>
     <!-- For About, which reads its name, links and release notes from it. -->
     <file alias="metainfo.xml">dev.aperte.Gextant.metainfo.xml</file>
   </gresource>

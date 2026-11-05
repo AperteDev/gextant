@@ -151,8 +151,8 @@ Roughly in this order, each with its own plan when it comes:
 
 - **Switch on and off**: a switch in the row, through `org.gnome.Shell.Extensions`
   (`EnableExtension`, `DisableExtension`), as the Extensions app does.
-- **Details**: the description, authors, supported Shell versions, the repository link, the
-  release notes of the update on offer, the installed and the backed-up version.
+- **More details**: the release notes of the update on offer, and the backed-up version (the
+  details window itself is built: metadata, Shell status, source and check results).
 - **Settings button**: opens the extension's preferences (`OpenExtensionPrefs`), as in the
   screenshot of the Extensions app; shown only for extensions that have some.
 - **More forges**: Codeberg and Forgejo, with the same checks; GitLab on a host not named
