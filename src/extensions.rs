@@ -13,6 +13,8 @@ pub struct Extension {
     pub counter: Option<u64>,
     /// The `url` of the metadata: the upstream's page, used later to find its repository.
     pub url: Option<String>,
+    /// `shell-version`: the GNOME Shell versions it says it supports; empty if it names none.
+    pub shell_versions: Vec<String>,
     /// From a system data dir (`/usr/share`), not the user's: not ours to update.
     pub system: bool,
 }
@@ -35,6 +37,16 @@ pub fn shell_major() -> Option<String> {
 }
 
 impl Extension {
+    /// Whether it supports GNOME Shell `shell` (a major version): by its major version, as the
+    /// Shell compares (`45` and `45.1` both fit 45). One that names no versions is not doubted.
+    pub fn supports(&self, shell: &str) -> bool {
+        self.shell_versions.is_empty()
+            || self
+                .shell_versions
+                .iter()
+                .any(|v| v.split('.').next() == Some(shell))
+    }
+
     /// What to show: the `version-name`, else the counter.
     pub fn version(&self) -> Option<String> {
         self.version_name
@@ -101,6 +113,15 @@ fn parse(text: &str, system: bool) -> Option<Extension> {
         version_name: str_of("version-name"),
         counter: m.get("version").and_then(|v| v.as_u64()),
         url: str_of("url"),
+        shell_versions: m
+            .get("shell-version")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default(),
         system,
     })
 }
@@ -126,6 +147,18 @@ mod tests {
             ("a@b", Some("7"))
         );
         assert!(e.system);
+    }
+
+    #[test]
+    fn supports_the_shell_by_major_version() {
+        let e = parse(
+            r#"{"uuid":"a@b","shell-version":["3.38","45","46.1"]}"#,
+            false,
+        )
+        .unwrap();
+        assert!(e.supports("45") && e.supports("46"));
+        assert!(!e.supports("47") && !e.supports("38"));
+        assert!(parse(r#"{"uuid":"a@b"}"#, false).unwrap().supports("51"));
     }
 
     #[test]

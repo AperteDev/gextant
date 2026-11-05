@@ -146,12 +146,16 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         ),
     ];
     let all = extensions::installed();
+    let shell = extensions::shell_major();
     let mut checked = Vec::new();
     for (system, group) in &groups {
         let mut rows = all.iter().filter(|e| e.system == *system).peekable();
         group.set_visible(rows.peek().is_some());
         for e in rows {
             let row = row(e);
+            if let Some(shell) = shell.as_deref().filter(|s| !e.supports(s)) {
+                row.add_prefix(&incompatible_icon(e, shell));
+            }
             if *system {
                 row.add_suffix(&version_label(e));
             } else {
@@ -184,7 +188,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         refused: RefCell::new(Vec::new()),
         run: Cell::new(0),
         cache: RefCell::new(Cache::load()),
-        shell: extensions::shell_major(),
+        shell,
     });
     button.connect_clicked({
         let checker = checker.clone();
@@ -210,6 +214,18 @@ fn row(e: &Extension) -> adw::ActionRow {
         .subtitle(&e.uuid)
         .use_markup(false)
         .subtitle_selectable(true)
+        .build()
+}
+
+/// The mark on a row whose extension does not list the running Shell among its versions.
+fn incompatible_icon(e: &Extension, shell: &str) -> gtk::Image {
+    gtk::Image::builder()
+        .icon_name("dialog-warning-symbolic")
+        .css_classes(["warning"])
+        .tooltip_text(format!(
+            "Not compatible with GNOME Shell {shell}: it supports {}",
+            e.shell_versions.join(", ")
+        ))
         .build()
 }
 
