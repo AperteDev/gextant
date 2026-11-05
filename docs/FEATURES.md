@@ -58,6 +58,7 @@ What Gextant can do, in short. The details of each release are in the
 - Installing an extension from a repository link.
 - Set the repository of an extension where none was found; mark what is installed.
 - Switching an extension on and off; its details and its settings button.
+- Forcing an extension that does not support your Shell to load anyway (to be investigated).
 - Checking in the background, with a notification; going back to the previous version.
 - Repositories that publish no releases, followed by their branch.
 - Codeberg and other forges.

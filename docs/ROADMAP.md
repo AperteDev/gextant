@@ -160,6 +160,12 @@ Roughly in this order, each with its own plan when it comes:
 - **Background checks**: a check without the window and a notification, for extensions in
   Check or Update mode (a user timer or the Background portal; to be planned together with
   autostart).
+- **Force compatibility**: for an extension flagged as not supporting the running Shell, a way
+  to add the Shell's version to its `shell-version` in `metadata.json`. Often that is all it
+  takes, but not always (the Shell's API changes between versions), so it is to be investigated:
+  how often it works, how to tell when it does not (an extension that fails to load), whether
+  to offer it per extension with a warning, and that an update replaces the folder and so
+  undoes it (Gextant would have to remember and reapply it, or ask again).
 - **Rollback**: back to the backed-up version from the row.
 - **Tracking a branch** for repositories that publish no releases (the version being a commit).
   Before installing from one, the row can say what the web gives for free: the date of the last
