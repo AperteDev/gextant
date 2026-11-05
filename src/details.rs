@@ -100,9 +100,9 @@ pub fn present(
         &info,
         "Installed",
         if e.system {
-            "For all users (system)"
+            "For all users"
         } else {
-            "By you"
+            "For you only"
         },
     );
     let row = property(&info, "Location", &e.path.display().to_string());
