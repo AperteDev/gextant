@@ -128,6 +128,11 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
     let object = |id: &str| ui.object::<glib::Object>(id).expect("object in window.blp");
     let window: adw::ApplicationWindow = object("window").downcast().unwrap();
     window.set_application(Some(app));
+    // A development build (debug: `cargo run`, `make sandbox`; packages are release builds) has
+    // the stripes of GNOME's own.
+    if cfg!(debug_assertions) {
+        window.add_css_class("devel");
+    }
 
     let groups = [
         (
