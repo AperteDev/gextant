@@ -18,10 +18,17 @@
     </g>
   </defs>
   <g transform="translate(0 -2)">
-    <use href="#body" fill="#5e2a78" stroke="#5e2a78" transform="translate(0 5)"/>
+    <g fill="#5e2a78" stroke="#5e2a78">
+      <use href="#body" transform="translate(0 0.500)"/><use href="#body" transform="translate(0 1)"/>
+      <use href="#body" transform="translate(0 1.500)"/><use href="#body" transform="translate(0 2)"/>
+      <use href="#body" transform="translate(0 2.500)"/><use href="#body" transform="translate(0 3)"/>
+      <use href="#body" transform="translate(0 3.500)"/><use href="#body" transform="translate(0 4)"/>
+      <use href="#body" transform="translate(0 4.500)"/><use href="#body" transform="translate(0 5)"/>
+    </g>
     <rect x="111" y="43.500" width="6" height="11" rx="2" fill="#1a5fb4" transform="translate(0 5)"/>
     <use href="#body" fill="url(#frame)" stroke="url(#frame)"/>
     <rect x="111" y="43.500" width="6" height="11" rx="2" fill="url(#glass)"/>
+    <path d="M23.600 101.900A86 86 0 0 0 104.400 101.900" fill="none" stroke="#fff" stroke-opacity="0.25" stroke-width="2" stroke-linecap="round"/>
     <g stroke="#613583" stroke-width="3" stroke-linecap="round">
       <path d="M64 100V110"/>
       <path d="M64 100V110" transform="rotate(10 64 26)"/>
@@ -29,6 +36,6 @@
       <path d="M64 100V110" transform="rotate(-10 64 26)"/>
       <path d="M64 100V110" transform="rotate(-20 64 26)"/>
     </g>
-    <circle cx="64" cy="26" r="4" fill="#f6f5f4" fill-opacity="0.85"/>
+    <circle cx="64" cy="26" r="4" fill="url(#glass)"/>
   </g>
 </svg>
