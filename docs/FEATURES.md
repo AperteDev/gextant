@@ -44,6 +44,12 @@ What Gextant can do, in short. The details of each release are in the
   fill in the token's name and permissions; the GitLab one only ever goes to gitlab.com.
 - Banners when a forge's limit is used up, and when a token has expired or was revoked.
 
+**About**
+
+- An About dialog in the main menu, with the version, the website, the issue tracker and the
+  license; its Support page links to where the development can be supported (Ko-fi, GitHub
+  Sponsors, Liberapay).
+
 ## Planned
 
 - Updating an extension from its repository, by hand, with a check of what is downloaded.
@@ -55,4 +61,4 @@ What Gextant can do, in short. The details of each release are in the
 - Repositories that publish no releases, followed by their branch.
 - Codeberg and other forges.
 - Searching for extensions.
-- Flatpak, AUR and `.deb` packages; translations.
+- Flathub and Fedora packages; translations.

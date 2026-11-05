@@ -1,5 +1,6 @@
 //! Gextant: updates GNOME Shell extensions straight from their upstream repositories.
 
+mod about;
 mod cache;
 mod check;
 mod ego;
@@ -34,7 +35,14 @@ fn main() -> glib::ExitCode {
         let quit = gio::ActionEntry::builder("quit")
             .activate(|app: &adw::Application, _, _| app.quit())
             .build();
-        app.add_action_entries([quit]);
+        let about = gio::ActionEntry::builder("about")
+            .activate(|app: &adw::Application, _, _| {
+                if let Some(window) = app.active_window() {
+                    about::present(&window);
+                }
+            })
+            .build();
+        app.add_action_entries([quit, about]);
         app.set_accels_for_action("app.quit", &["<Control>q"]);
         app.set_accels_for_action("win.preferences", &["<Control>comma"]);
     });
