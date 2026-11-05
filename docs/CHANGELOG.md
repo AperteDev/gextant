@@ -35,5 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository; each comes with a link that fills in the token's name and permissions
 - Banners when a forge's rate limit is used up (naming it, and offering Preferences where a
   token would help) and when a forge refuses a token (expired or revoked)
+- Packages with each release: a tarball and a `.deb`, and the AUR packages `gextant`,
+  `gextant-bin` and `gextant-git`; `make install` installs for the current user
 
 [Unreleased]: https://github.com/AperteDev/gextant/commits/HEAD

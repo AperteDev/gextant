@@ -59,9 +59,17 @@ All of what Gextant does, and what it will, is listed in [FEATURES.md](docs/FEAT
 
 ## Getting started
 
-Gextant needs GNOME 48 or newer. There are no packages yet (Flatpak, AUR and `.deb` are
-planned), so for now [build it from source](#building). Then open Gextant: it lists your
-extensions and starts checking them.
+Gextant needs GNOME 48 or newer. Install it from:
+
+- **Arch Linux (AUR):** [`gextant`](https://aur.archlinux.org/packages/gextant) (built from the
+  release), [`gextant-bin`](https://aur.archlinux.org/packages/gextant-bin) (the release's
+  binary) or [`gextant-git`](https://aur.archlinux.org/packages/gextant-git) (the latest commit).
+- **Debian and Ubuntu:** the `.deb` of the [latest release](https://github.com/AperteDev/gextant/releases/latest)
+  (built for Ubuntu 26.04).
+- **Any other distribution:** the release's tarball, extracted into `/`, or
+  [build it from source](#building).
+
+Then open Gextant: it lists your extensions and starts checking them.
 
 ## Development
 
@@ -74,7 +82,7 @@ extensions and starts checking them.
 cargo run --release
 ```
 
-There is no install target yet: the binary is `target/release/gextant`.
+`make install` installs it for the current user (`~/.local`), `make uninstall` removes it.
 
 Every push is checked by [CI](.github/workflows/ci.yml); releases are made by the manual
 [Release](.github/workflows/release.yml) workflow and listed in the

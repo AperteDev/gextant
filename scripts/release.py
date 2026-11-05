@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Prepare a release: set the version in Cargo.toml and Cargo.lock, move the Unreleased changelog
-section under the new version, and print its notes for the GitHub release. The Release workflow
-runs it (and the CI, to build with the version set).
+section under the new version, and print its notes for the GitHub release. The metainfo gets
+those notes too, and its screenshot is taken from the new tag (app stores want it from a tag,
+not a branch). The Release workflow runs it (and the CI, to build with the version set).
 
     scripts/release.py 0.1.0 > notes.md
-
-Packaging files (metainfo, Flatpak, RPM spec) get their version here when they exist.
 """
 
 import datetime
+import html
 import pathlib
 import re
 import sys
@@ -29,6 +29,64 @@ def edit(path: str, pattern: str, replacement: str) -> None:
     if count == 0:
         fail(f"{path}: nothing matches {pattern!r}")
     file.write_text(new)
+
+
+def inline(text: str) -> str:
+    """Changelog Markdown within a line as AppStream markup: `code` kept, links as their text."""
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+    return re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(text, quote=False))
+
+
+def release_xml(version: str, date: str, notes: str, repo: str, indent: str) -> str:
+    """A metainfo <release> with a changelog section's notes, untranslated: each `### Added` and
+    the like a paragraph, its items a list."""
+    lines = [f'<release version="{version}" date="{date}">']
+    lines.append(f'  <url type="details">{repo}/releases/tag/v{version}</url>')
+    lines.append('  <description translate="no">')  # English, as the changelog
+    items: list[str] = []
+
+    def close_list() -> None:
+        if items:
+            lines.append("    <ul>")
+            lines.extend(f"      <li>{inline(i)}</li>" for i in items)
+            lines.append("    </ul>")
+            items.clear()
+
+    for line in notes.splitlines():
+        if line.startswith("### "):
+            close_list()
+            lines.append(f"    <p>{inline(line[4:].strip())}</p>")
+        elif line.startswith("- "):
+            items.append(line[2:].strip())
+        elif line.strip() and items:
+            items[-1] += " " + line.strip()  # an item's next line
+        elif line.strip():
+            close_list()
+            lines.append(f"    <p>{inline(line.strip())}</p>")
+    close_list()
+    lines += ["  </description>", "</release>"]
+    return "\n".join(indent + l for l in lines) + "\n"
+
+
+def set_release(metainfo: str, version: str, date: str, notes: str, repo: str) -> None:
+    """Put the release first in the metainfo's <releases>, or replace it when listed (the first
+    one is written before its release)."""
+    file = ROOT / metainfo
+    text = file.read_text()
+    listed = re.compile(
+        rf'^([ \t]*)<release version="{re.escape(version)}"[^>]*?(?:/>|>.*?</release>)\n',
+        re.M | re.S,
+    )
+    if match := listed.search(text):
+        new = release_xml(version, date, notes, repo, match[1])
+        text = text[: match.start()] + new + text[match.end() :]
+    else:
+        match = re.search(r"^([ \t]*)<releases>\n", text, re.M)
+        if not match:
+            fail(f"{metainfo}: no <releases>")
+        new = release_xml(version, date, notes, repo, match[1] + "  ")
+        text = text[: match.end()] + new + text[match.end() :]
+    file.write_text(text)
 
 
 def main() -> None:
@@ -79,6 +137,13 @@ def main() -> None:
             flags=re.M,
         )
     )
+
+    metainfo = "data/dev.aperte.Gextant.metainfo.xml"
+    set_release(metainfo, version, date, notes, repo)
+    # The screenshot from the new tag.
+    meta = ROOT / metainfo
+    shot = r"(/gextant/)v[0-9.]+(/docs/screenshots/)"
+    meta.write_text(re.sub(shot, rf"\g<1>v{version}\g<2>", meta.read_text()))
 
     print(notes)
     print(f"Prepared release {version}", file=sys.stderr)
