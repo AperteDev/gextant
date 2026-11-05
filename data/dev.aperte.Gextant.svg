@@ -8,24 +8,27 @@
       <stop offset="0" stop-color="#99c1f1"/>
       <stop offset="1" stop-color="#3584e4"/>
     </linearGradient>
+    <g id="body">
+      <path d="M64 26L31.800 93.400M64 26L96.200 93.400" fill="none" stroke-width="9"/>
+      <path d="M64 26V96" fill="none" stroke-width="7"/>
+      <rect x="78" y="40" width="14" height="18" rx="2.500" stroke="none"/>
+      <rect x="90" y="45" width="22" height="8" rx="1.500" stroke="none"/>
+      <path d="M22.100 93A79 79 0 0 0 105.900 93" fill="none" stroke-width="18"/>
+      <circle cx="64" cy="26" r="12" stroke="none"/>
+    </g>
   </defs>
-  <g fill="none" stroke="url(#frame)">
-    <path d="M64 26L31.800 93.400M64 26L96.200 93.400" stroke-width="9"/>
-    <path d="M64 26V96" stroke-width="7"/>
+  <g transform="translate(0 -2)">
+    <use href="#body" fill="#5e2a78" stroke="#5e2a78" transform="translate(0 5)"/>
+    <rect x="111" y="43.500" width="6" height="11" rx="2" fill="#1a5fb4" transform="translate(0 5)"/>
+    <use href="#body" fill="url(#frame)" stroke="url(#frame)"/>
+    <rect x="111" y="43.500" width="6" height="11" rx="2" fill="url(#glass)"/>
+    <g stroke="#613583" stroke-width="3" stroke-linecap="round">
+      <path d="M64 100V110"/>
+      <path d="M64 100V110" transform="rotate(10 64 26)"/>
+      <path d="M64 100V110" transform="rotate(20 64 26)"/>
+      <path d="M64 100V110" transform="rotate(-10 64 26)"/>
+      <path d="M64 100V110" transform="rotate(-20 64 26)"/>
+    </g>
+    <circle cx="64" cy="26" r="4" fill="#f6f5f4" fill-opacity="0.85"/>
   </g>
-  <g fill="url(#frame)">
-    <rect x="78" y="40" width="14" height="18" rx="2.500"/>
-    <rect x="90" y="45" width="22" height="8" rx="1.500"/>
-  </g>
-  <rect x="111" y="43.500" width="6" height="11" rx="2" fill="url(#glass)"/>
-  <path d="M22.100 93A79 79 0 0 0 105.900 93" fill="none" stroke="url(#frame)" stroke-width="18"/>
-  <g stroke="#613583" stroke-width="3" stroke-linecap="round">
-    <path d="M64 100V110"/>
-    <path d="M64 100V110" transform="rotate(10 64 26)"/>
-    <path d="M64 100V110" transform="rotate(20 64 26)"/>
-    <path d="M64 100V110" transform="rotate(-10 64 26)"/>
-    <path d="M64 100V110" transform="rotate(-20 64 26)"/>
-  </g>
-  <circle cx="64" cy="26" r="12" fill="url(#frame)"/>
-  <circle cx="64" cy="26" r="4" fill="#f6f5f4" fill-opacity="0.85"/>
 </svg>

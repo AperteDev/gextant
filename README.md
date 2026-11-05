@@ -5,7 +5,10 @@ review on extensions.gnome.org. It lists the extensions you have installed, find
 repository from its `metadata.json`, checks for new releases and updates them on request, or by
 itself for the extensions you choose. A repository link installs a new extension.
 
-Gextant is at the very beginning: only the window exists. See the [roadmap](docs/ROADMAP.md).
+Gextant is at an early stage: it lists your extensions and checks them for updates, against their
+repositories (GitHub, GitLab) and extensions.gnome.org; it does not install anything yet. See
+what it does in [features](docs/FEATURES.md), what is coming in the [roadmap](docs/ROADMAP.md) and
+what changed in the [changelog](docs/CHANGELOG.md).
 
 ## Building
 
