@@ -4,7 +4,7 @@
 use crate::ego;
 use crate::token::Tokens;
 use crate::upstream::{
-    self, Error, Source, Upstream, Version, compare, compare_counter, display_version,
+    self, Error, Failure, Source, Upstream, Version, compare, compare_counter, display_version,
 };
 use serde::{Deserialize, Serialize};
 
@@ -18,7 +18,7 @@ pub struct Found {
 
 /// The two checks, each with its own result: one failing leaves the other's answer to show.
 pub struct Checks {
-    pub upstream: Result<Upstream, Error>,
+    pub upstream: Result<Upstream, Failure>,
     pub ego: Result<Option<u64>, Error>,
 }
 
@@ -44,7 +44,10 @@ impl Checks {
     /// The host that said too many requests were made, if one did.
     pub fn rate_limited(&self) -> Option<&str> {
         match &self.upstream {
-            Err(Error::RateLimited(host)) => Some(host),
+            Err(Failure {
+                error: Error::RateLimited(host),
+                ..
+            }) => Some(host),
             _ => None,
         }
     }
@@ -66,29 +69,23 @@ pub fn run(uuid: &str, url: Option<&str>, tokens: &Tokens, shell: Option<&str>) 
     })
 }
 
-/// A version a row shows, with the sources that have it: two that agree make one chip.
+/// A version a row shows, with the sources that have it: two that agree make one chip. Where a
+/// source has no version to show, its chip says `?` instead, and the tooltip why.
 pub struct Chip {
-    /// Each source, with what it calls the version.
+    /// Each source, with what it calls the version (or why it has none).
     pub sources: Vec<(Source, String)>,
     pub version: String,
     /// Against what is installed: `Newer` means the installed one is outdated.
     pub state: Version,
+    /// The source has no version: it could not be fetched, or there is none.
+    pub missing: bool,
     pub tip: String,
-}
-
-/// Said instead of a version where a check has none.
-pub struct Note {
-    pub text: &'static str,
-    /// `dim-label`, `warning` or `error`.
-    pub class: &'static str,
-    pub tip: Option<String>,
 }
 
 pub struct View {
     /// The installed version, when no chip shows it already.
     pub installed: Option<String>,
     pub chips: Vec<Chip>,
-    pub note: Option<Note>,
 }
 
 fn rank(v: Version) -> u8 {
@@ -110,75 +107,117 @@ pub fn abbreviate(version: &str) -> String {
     format!("{head}…")
 }
 
+/// What a source gave: a version, or why there is none.
+enum Entry {
+    Version {
+        source: Source,
+        raw: String,
+        version: String,
+        state: Version,
+    },
+    Missing {
+        source: Source,
+        why: String,
+    },
+}
+
 pub fn view(checks: &Checks, version_name: Option<&str>, counter: Option<u64>) -> View {
     let installed = version_name
         .map(str::to_owned)
         .or_else(|| counter.map(|c| c.to_string()));
-    // Source, what it calls the version, the version, how it compares.
-    let mut found: Vec<(Source, String, String, Version)> = Vec::new();
-    let mut note = None;
-    match &checks.upstream {
-        Ok(Upstream::Tag { tag, source }) => found.push((
+    let missing = |source, why: &str| Entry::Missing {
+        source,
+        why: why.to_owned(),
+    };
+    let mut entries: Vec<Entry> = Vec::new();
+    entries.push(match &checks.upstream {
+        Ok(Upstream::Tag { tag, source }) => Entry::Version {
+            source: *source,
+            raw: tag.clone(),
+            version: display_version(tag, version_name, counter),
+            state: compare(version_name, counter, tag),
+        },
+        Ok(Upstream::NoRelease(source)) => missing(
             *source,
-            tag.clone(),
-            display_version(tag, version_name, counter),
-            compare(version_name, counter, tag),
-        )),
-        Ok(Upstream::NoRelease(_)) => {
-            note = Some(Note {
-                text: "No releases",
-                class: "dim-label",
-                tip: None,
-            })
+            "The repository has no releases or tags, so there is no version to compare.",
+        ),
+        Ok(Upstream::NoRepo(Some(_))) => missing(
+            Source::Web,
+            "No repository was found behind the extension's website.",
+        ),
+        Ok(Upstream::NoRepo(None)) => missing(
+            Source::Web,
+            "The extension's metadata names no website or repository.",
+        ),
+        Err(Failure {
+            error: Error::RateLimited(host),
+            source,
+        }) => missing(
+            *source,
+            &format!("{host} says too many requests were made. Try again later."),
+        ),
+        Err(Failure {
+            error: Error::Other(e),
+            source,
+        }) => missing(*source, &format!("The check failed: {e}")),
+        Err(Failure {
+            error: Error::Missing,
+            source,
+        }) => missing(*source, "The repository was not found."),
+    });
+    match &checks.ego {
+        Ok(Some(v)) => entries.push(Entry::Version {
+            source: Source::Ego,
+            raw: v.to_string(),
+            version: v.to_string(),
+            state: compare_counter(counter, *v),
+        }),
+        // A portal that does not know the extension is not a problem: not every one is on it.
+        Ok(None) => {}
+        Err(e) => {
+            let why = match e {
+                Error::RateLimited(host) => format!("{host} says too many requests were made."),
+                Error::Other(e) => format!("extensions.gnome.org could not be asked: {e}"),
+                Error::Missing => "extensions.gnome.org does not know the extension.".to_owned(),
+            };
+            entries.push(missing(Source::Ego, &why));
         }
-        Ok(Upstream::NoRepo(_)) | Err(Error::Missing) => {
-            note = Some(Note {
-                text: "No repository found",
-                class: "dim-label",
-                tip: None,
-            })
-        }
-        Err(Error::RateLimited(host)) => {
-            note = Some(Note {
-                text: "Rate limit reached",
-                class: "warning",
-                tip: Some(format!("{host} says too many requests were made")),
-            })
-        }
-        Err(Error::Other(e)) => {
-            note = Some(Note {
-                text: "Check failed",
-                class: "error",
-                tip: Some(e.clone()),
-            })
-        }
-    }
-    if let Ok(Some(v)) = checks.ego {
-        found.push((
-            Source::Ego,
-            v.to_string(),
-            v.to_string(),
-            compare_counter(counter, v),
-        ));
-    }
-    // Not having an upstream is nothing to say where EGO has an answer.
-    if !found.is_empty() && note.as_ref().is_some_and(|n| n.class == "dim-label") {
-        note = None;
     }
 
     let mut chips: Vec<Chip> = Vec::new();
-    for (source, raw, version, state) in found {
-        match chips.iter_mut().find(|c| c.version == version) {
-            Some(chip) => {
-                chip.sources.push((source, raw));
-                if rank(state) > rank(chip.state) {
-                    chip.state = state;
-                }
-            }
-            None => chips.push(Chip {
-                sources: vec![(source, raw)],
+    for entry in entries {
+        match entry {
+            Entry::Version {
+                source,
+                raw,
                 version,
                 state,
+            } => {
+                match chips
+                    .iter_mut()
+                    .find(|c| !c.missing && c.version == version)
+                {
+                    Some(chip) => {
+                        chip.sources.push((source, raw));
+                        if rank(state) > rank(chip.state) {
+                            chip.state = state;
+                        }
+                    }
+                    None => chips.push(Chip {
+                        sources: vec![(source, raw)],
+                        version,
+                        state,
+                        missing: false,
+                        tip: String::new(),
+                    }),
+                }
+            }
+            // Never merged: each has its own reason.
+            Entry::Missing { source, why } => chips.push(Chip {
+                sources: vec![(source, why)],
+                version: "?".to_owned(),
+                state: Version::Unknown,
+                missing: true,
                 tip: String::new(),
             }),
         }
@@ -187,23 +226,28 @@ pub fn view(checks: &Checks, version_name: Option<&str>, counter: Option<u64>) -
         let mut lines: Vec<String> = chip
             .sources
             .iter()
-            .map(|(source, raw)| format!("{}: {raw}", source.name()))
+            .map(|(source, text)| format!("{}: {text}", source.name()))
             .collect();
         if let Some(installed) = &installed {
-            let verdict = match chip.state {
-                Version::Same => "up to date",
-                Version::Newer => "update available",
-                Version::Unknown => "cannot be compared",
+            let verdict = match (chip.missing, chip.state) {
+                (true, _) => None,
+                (_, Version::Same) => Some("up to date"),
+                (_, Version::Newer) => Some("update available"),
+                (_, Version::Unknown) => Some("cannot be compared"),
             };
-            lines.push(format!("Installed: {installed} ({verdict})"));
+            lines.push(match verdict {
+                Some(v) => format!("Installed: {installed} ({v})"),
+                None => format!("Installed: {installed}"),
+            });
         }
         chip.tip = lines.join("\n");
     }
-    let shown = chips.iter().any(|c| Some(&c.version) == installed.as_ref());
+    let shown = chips
+        .iter()
+        .any(|c| !c.missing && Some(&c.version) == installed.as_ref());
     View {
         installed: installed.filter(|_| !shown),
         chips,
-        note,
     }
 }
 
@@ -211,7 +255,7 @@ pub fn view(checks: &Checks, version_name: Option<&str>, counter: Option<u64>) -
 mod tests {
     use super::*;
 
-    fn tag(t: &str, source: Source) -> Result<Upstream, Error> {
+    fn tag(t: &str, source: Source) -> Result<Upstream, Failure> {
         Ok(Upstream::Tag {
             tag: t.into(),
             source,
@@ -241,7 +285,6 @@ mod tests {
         let v = view(&c, None, Some(66));
         assert_eq!(versions(&v), [(2, "66", Version::Same)]);
         assert_eq!(v.installed, None);
-        assert!(v.note.is_none());
     }
 
     #[test]
@@ -270,32 +313,50 @@ mod tests {
     }
 
     #[test]
-    fn no_upstream_is_not_said_where_the_portal_answers() {
-        let none = Checks {
-            upstream: Ok(Upstream::NoRepo(None)),
-            ego: Ok(None),
-        };
-        assert_eq!(
-            view(&none, None, Some(1)).note.unwrap().text,
-            "No repository found"
-        );
-        let ego = Checks {
+    fn a_source_without_a_version_shows_a_question_mark() {
+        let c = Checks {
             upstream: Ok(Upstream::NoRelease(Source::GitHub)),
             ego: Ok(Some(13)),
         };
-        let v = view(&ego, None, Some(13));
-        assert!(v.note.is_none());
-        assert_eq!(versions(&v), [(1, "13", Version::Same)]);
+        let v = view(&c, None, Some(13));
+        assert_eq!(v.chips.len(), 2);
+        assert!(v.chips[0].missing && v.chips[0].version == "?");
+        assert_eq!(v.chips[0].sources[0].0, Source::GitHub);
+        assert!(v.chips[0].tip.contains("no releases"));
+        assert_eq!(
+            (v.chips[1].version.as_str(), v.chips[1].state),
+            ("13", Version::Same)
+        );
+        // The "?" is not the installed version, so that shows by itself only if no chip has it.
+        assert_eq!(v.installed, None);
     }
 
     #[test]
-    fn a_limited_upstream_leaves_the_portal_chip() {
+    fn no_repository_is_the_globe() {
         let c = Checks {
-            upstream: Err(Error::RateLimited("gitlab.com".into())),
+            upstream: Ok(Upstream::NoRepo(None)),
+            ego: Ok(None),
+        };
+        let v = view(&c, None, Some(1));
+        assert_eq!(v.chips.len(), 1);
+        assert_eq!(v.chips[0].sources[0].0, Source::Web);
+        assert_eq!(v.installed.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn a_limited_upstream_says_which_host_and_leaves_the_portal_chip() {
+        let upstream = Err(Failure {
+            error: Error::RateLimited("gitlab.com".into()),
+            source: Source::GitLab,
+        });
+        let c = Checks {
+            upstream,
             ego: Ok(Some(13)),
         };
+        assert_eq!(c.rate_limited(), Some("gitlab.com"));
         let v = view(&c, None, Some(13));
-        assert_eq!(v.note.unwrap().text, "Rate limit reached");
-        assert_eq!(v.chips.len(), 1);
+        assert_eq!(v.chips.len(), 2);
+        assert_eq!(v.chips[0].sources[0].0, Source::GitLab);
+        assert!(v.chips[0].tip.contains("gitlab.com says too many requests"));
     }
 }

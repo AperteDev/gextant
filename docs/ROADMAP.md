@@ -17,12 +17,13 @@ icon coloured as the version is. Sources that agree make one chip with two icons
 differ sit side by side with their own versions. Green: what is installed is current for that
 source; blue: that source has something newer; grey: the two cannot be compared. The
 installed version is shown by itself, with the theme's computer icon
-(`computer-symbolic`, as Nautilus's My Computer extension uses), only where no chip has it. The generic
-globe is the theme's `globe-symbolic`, with a bundled one for themes that have none (Adwaita).
-A long
-version is cut to 12 characters; the whole one is in the tooltip. Where there is no version to
-show, a word says why (no repository, no releases, rate limit reached, check failed). What is
-left on a row:
+(`computer-symbolic`, as Nautilus's My Computer extension uses), only where no chip has it. A
+long version is cut to 12 characters; the whole one is in the tooltip. Where a source has no
+version to show, its chip is its icon and a yellow `?`, and the tooltip says why: no releases or
+tags in the repository, a rate limit (naming the host), a failed check, no repository behind the
+extension's website, or none named at all (the generic globe: the theme's `globe-symbolic`, with
+a bundled one for themes that have none, Adwaita). A portal that does not know the extension
+shows nothing: not every extension is on it. What is left on a row:
 
 - a mode, for user extensions: **Off** (not checked), **Check** (the default: look for updates,
   tell, never install) or **Update** (install new versions by itself); today every user

@@ -420,8 +420,14 @@ pub enum Upstream {
     NoRelease(Source),
 }
 
+/// A failed look at an upstream, and which source it was.
+pub struct Failure {
+    pub error: Error,
+    pub source: Source,
+}
+
 /// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release.
-pub fn find(uuid: &str, url: Option<&str>, tokens: &Tokens) -> Result<Upstream, Error> {
+pub fn find(uuid: &str, url: Option<&str>, tokens: &Tokens) -> Result<Upstream, Failure> {
     let Some(url) = url else {
         return Ok(Upstream::NoRepo(None));
     };
@@ -434,9 +440,19 @@ pub fn find(uuid: &str, url: Option<&str>, tokens: &Tokens) -> Result<Upstream, 
     let mut result = Ok(Upstream::NoRepo(Some(Source::Web)));
     for (repo, guessed) in candidates {
         match latest(&repo, tokens, guessed.then_some(uuid)) {
-            Err(e @ Error::RateLimited(_)) => return Err(e),
+            Err(error @ Error::RateLimited(_)) => {
+                return Err(Failure {
+                    error,
+                    source: Source::of(&repo),
+                });
+            }
             Err(Error::Missing) => {}
-            Err(e) => result = Err(e),
+            Err(error) => {
+                result = Err(Failure {
+                    error,
+                    source: Source::of(&repo),
+                })
+            }
             Ok(None) if !guessed => result = Ok(Upstream::NoRelease(Source::of(&repo))),
             Ok(Some(r)) if !guessed || r.ships => {
                 return Ok(Upstream::Tag {

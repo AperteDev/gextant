@@ -45,10 +45,6 @@ impl Checked {
         for chip in &view.chips {
             self.holder.append(&chip_widget(chip));
         }
-        if let Some(note) = view.note {
-            self.holder
-                .append(&label(note.text, note.class, note.tip.as_deref()));
-        }
     }
 }
 
@@ -87,12 +83,13 @@ fn installed_widget(version: &str) -> gtk::Box {
 
 /// A version with the icons of its sources, in the colour of how it stands against what is
 /// installed: green if that is up to date, blue if the version is newer, grey if the two cannot
-/// be compared.
+/// be compared; yellow with a `?` where the source has no version.
 fn chip_widget(chip: &Chip) -> gtk::Box {
-    let class = match chip.state {
-        Version::Same => "success",
-        Version::Newer => "accent",
-        Version::Unknown => "dim-label",
+    let class = match (chip.missing, chip.state) {
+        (true, _) => "warning",
+        (_, Version::Same) => "success",
+        (_, Version::Newer) => "accent",
+        (_, Version::Unknown) => "dim-label",
     };
     let widget = gtk::Box::builder()
         .spacing(4)
@@ -285,7 +282,10 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
                 let crashed = || upstream::Error::Other("The check crashed".into());
                 (
                     Checks {
-                        upstream: Err(crashed()),
+                        upstream: Err(upstream::Failure {
+                            error: crashed(),
+                            source: upstream::Source::Web,
+                        }),
                         ego: Err(crashed()),
                     },
                     false,
