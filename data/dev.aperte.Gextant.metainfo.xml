@@ -31,6 +31,7 @@
   <url type="homepage">https://github.com/AperteDev/gextant</url>
   <url type="bugtracker">https://github.com/AperteDev/gextant/issues</url>
   <url type="vcs-browser">https://github.com/AperteDev/gextant</url>
+  <url type="contribute">https://github.com/AperteDev/gextant/blob/master/docs/CONTRIBUTING.md</url>
   <url type="donation">https://github.com/sponsors/SelfRef</url>
   <branding>
     <color type="primary" scheme_preference="light">#e4c6ee</color>

@@ -74,6 +74,11 @@ Gextant needs GNOME 48 or newer. Install it from:
 
 Then open Gextant: it lists your extensions and starts checking them.
 
+## Contributing
+
+Ideas, bug reports and questions are welcome as [issues](https://github.com/AperteDev/gextant/issues);
+see [CONTRIBUTING.md](docs/CONTRIBUTING.md) before opening a pull request.
+
 ## Development
 
 ### Building
