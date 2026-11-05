@@ -224,7 +224,6 @@ fn row(e: &Extension) -> adw::ActionRow {
         .title(&e.name)
         .subtitle(&e.uuid)
         .use_markup(false)
-        .subtitle_selectable(true)
         .build()
 }
 
