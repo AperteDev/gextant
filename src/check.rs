@@ -82,6 +82,19 @@ pub struct Chip {
     pub tip: String,
 }
 
+impl Chip {
+    /// The style class of its colour: yellow where there is no version, else green, blue or grey
+    /// as the version stands against what is installed.
+    pub fn class(&self) -> &'static str {
+        match (self.missing, self.state) {
+            (true, _) => "warning",
+            (_, Version::Same) => "success",
+            (_, Version::Newer) => "accent",
+            (_, Version::Unknown) => "dim-label",
+        }
+    }
+}
+
 pub struct View {
     /// The installed version, when no chip shows it already.
     pub installed: Option<String>,

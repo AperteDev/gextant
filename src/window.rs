@@ -5,7 +5,7 @@ use crate::cache::{self, Cache};
 use crate::check::{self, Checks, Chip, Found, View, abbreviate};
 use crate::extensions::{self, Extension};
 use crate::token::Tokens;
-use crate::upstream::{self, Version};
+use crate::upstream;
 use crate::{details, gitlab, preferences};
 use adw::prelude::*;
 use gtk::{gio, glib};
@@ -88,12 +88,7 @@ fn installed_widget(version: &str) -> gtk::Box {
 /// installed: green if that is up to date, blue if the version is newer, grey if the two cannot
 /// be compared; yellow with a `?` where the source has no version.
 fn chip_widget(chip: &Chip) -> gtk::Box {
-    let class = match (chip.missing, chip.state) {
-        (true, _) => "warning",
-        (_, Version::Same) => "success",
-        (_, Version::Newer) => "accent",
-        (_, Version::Unknown) => "dim-label",
-    };
+    let class = chip.class();
     let widget = gtk::Box::builder()
         .spacing(4)
         .valign(gtk::Align::Center)

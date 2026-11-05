@@ -2,6 +2,7 @@
 
 use crate::check::View;
 use crate::extensions::{self, Extension, ShellInfo};
+use crate::upstream::Version;
 use adw::prelude::*;
 use gtk::{gio, glib};
 use serde_json::Value;
@@ -28,6 +29,18 @@ fn property(group: &adw::PreferencesGroup, title: &str, value: &str) -> adw::Act
         .build();
     group.add(&row);
     row
+}
+
+/// A flat icon button for a row's end.
+fn icon_button(icon: &str, tip: &str, clicked: impl Fn(&gtk::Button) + 'static) -> gtk::Button {
+    let button = gtk::Button::builder()
+        .icon_name(icon)
+        .tooltip_text(tip)
+        .valign(gtk::Align::Center)
+        .css_classes(["flat"])
+        .build();
+    button.connect_clicked(clicked);
+    button
 }
 
 fn value_text(v: &Value) -> String {
@@ -62,14 +75,18 @@ pub fn present(
     if let Some(d) = e.metadata.get("description") {
         property(&info, "Description", &value_text(d));
     }
-    property(&info, "UUID", &e.uuid);
-    let version = match (&e.version_name, e.counter) {
-        (Some(name), Some(c)) => format!("{name} (version {c})"),
-        (Some(v), None) => v.clone(),
-        (None, Some(c)) => c.to_string(),
-        (None, None) => "None".to_owned(),
-    };
-    property(&info, "Version", &version);
+    let row = property(&info, "UUID", &e.uuid);
+    row.add_suffix(&icon_button("edit-copy-symbolic", "Copy UUID", {
+        let uuid = e.uuid.clone();
+        move |button| button.clipboard().set_text(&uuid)
+    }));
+    if let Some(v) = &e.version_name {
+        property(&info, "Version", v).add_prefix(&gtk::Image::from_icon_name("computer-symbolic"));
+    }
+    if let Some(c) = e.counter {
+        property(&info, "Version Number", &c.to_string())
+            .add_prefix(&gtk::Image::from_icon_name("gextant-gnome-symbolic"));
+    }
     property(
         &info,
         "Installed",
@@ -79,7 +96,17 @@ pub fn present(
             "By you"
         },
     );
-    property(&info, "Location", &e.path.display().to_string());
+    let row = property(&info, "Location", &e.path.display().to_string());
+    row.add_suffix(&icon_button("folder-open-symbolic", "Open Folder", {
+        let (window, folder) = (window.clone(), gio::File::for_path(&e.path));
+        move |_| {
+            gtk::FileLauncher::new(Some(&folder)).launch(
+                Some(&window),
+                None::<&gio::Cancellable>,
+                |_| {},
+            )
+        }
+    }));
 
     let shell_group = object("shell_group");
     let supported = if e.shell_versions.is_empty() {
@@ -138,12 +165,41 @@ pub fn present(
         } else {
             &chip.version
         };
-        let row = property(&source, title, &chip.tip);
+        // The version first; what is behind it, dimmed (the subtitle) below.
+        let mut lines: Vec<String> = Vec::new();
+        if !chip.missing {
+            lines.push(
+                match chip.state {
+                    Version::Same => "Up to date",
+                    Version::Newer => "Update available",
+                    Version::Unknown => "Cannot be compared with the installed version",
+                }
+                .to_owned(),
+            );
+        }
+        lines.extend(
+            chip.sources
+                .iter()
+                .map(|(s, text)| format!("{}: {text}", s.name())),
+        );
+        let row = adw::ActionRow::builder()
+            .title(title)
+            .subtitle(lines.join("\n"))
+            .use_markup(false)
+            .subtitle_selectable(true)
+            .build();
         let icons = gtk::Box::builder().spacing(4).build();
         for (s, _) in &chip.sources {
-            icons.append(&gtk::Image::from_icon_name(s.icon()));
+            icons.append(
+                &gtk::Image::builder()
+                    .icon_name(s.icon())
+                    .css_classes([chip.class()])
+                    .build(),
+            );
         }
         row.add_prefix(&icons);
+        row.add_css_class(chip.class());
+        source.add(&row);
     }
     source.set_visible(has_source);
 
