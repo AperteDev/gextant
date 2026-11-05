@@ -2,7 +2,7 @@
 
 use gtk::prelude::*;
 use gtk::{gio, glib};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct Extension {
     pub uuid: String,
@@ -43,11 +43,31 @@ impl Extension {
     }
 }
 
+/// Where the user's data is, as the Shell sees it. In a Flatpak `XDG_DATA_HOME` is the app's
+/// own private folder; the extensions are in the host's (shared with `--filesystem=xdg-data/…`).
+fn user_data_dir() -> PathBuf {
+    if !in_flatpak() {
+        return glib::user_data_dir();
+    }
+    std::env::var_os("HOST_XDG_DATA_HOME")
+        .map_or_else(|| glib::home_dir().join(".local/share"), PathBuf::from)
+}
+
+fn in_flatpak() -> bool {
+    Path::new("/.flatpak-info").exists()
+}
+
 /// The user's extensions, then the system's. A UUID found twice is listed once, from the first
-/// place, the user's, as the Shell loads it.
+/// place, the user's, as the Shell loads it. A Flatpak sees the runtime's `/usr/share`, not the
+/// host's, so it lists the user's only.
 pub fn installed() -> Vec<Extension> {
-    let user = std::iter::once((glib::user_data_dir(), false));
-    let system = glib::system_data_dirs().into_iter().map(|d| (d, true));
+    let user = std::iter::once((user_data_dir(), false));
+    let system_dirs = if in_flatpak() {
+        Vec::new()
+    } else {
+        glib::system_data_dirs()
+    };
+    let system = system_dirs.into_iter().map(|d| (d, true));
     let mut found: Vec<Extension> = Vec::new();
     for (dir, system) in user.chain(system) {
         let Ok(entries) = std::fs::read_dir(dir.join("gnome-shell/extensions")) else {
