@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 SelfRef -->
+<component type="desktop-application">
+  <id>dev.aperte.Gextant</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Gextant</name>
+  <summary>Update GNOME Shell extensions from their repositories</summary>
+  <description>
+    <p>
+      Gextant checks your GNOME Shell extensions against the repositories they come from, so a
+      fix or a release reaches you without waiting for the review on extensions.gnome.org.
+    </p>
+    <ul>
+      <li>Lists the extensions installed on this computer</li>
+      <li>Finds each one's repository (GitHub or GitLab) from its metadata</li>
+      <li>Shows the newest version of the repository and of extensions.gnome.org beside what you have</li>
+      <li>Reads the forges' pages, which cost no API quota; an access token is optional</li>
+    </ul>
+  </description>
+  <developer id="dev.aperte">
+    <name translate="no">Aperte</name>
+  </developer>
+  <launchable type="desktop-id">dev.aperte.Gextant.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/AperteDev/gextant/v0.1.0/docs/screenshots/extensions.png</image>
+      <caption>The installed extensions, each with the newest version found for it</caption>
+    </screenshot>
+  </screenshots>
+  <url type="homepage">https://github.com/AperteDev/gextant</url>
+  <url type="bugtracker">https://github.com/AperteDev/gextant/issues</url>
+  <url type="vcs-browser">https://github.com/AperteDev/gextant</url>
+  <url type="donation">https://github.com/sponsors/SelfRef</url>
+  <branding>
+    <color type="primary" scheme_preference="light">#e4c6ee</color>
+    <color type="primary" scheme_preference="dark">#4a2561</color>
+  </branding>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+    <control>touch</control>
+  </supports>
+  <releases>
+    <release version="0.1.0" date="2026-11-05"/>
+  </releases>
+</component>

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Gextant
+Comment=Update GNOME Shell extensions from their repositories
+Exec=gextant
+Icon=dev.aperte.Gextant
+Terminal=false
+Type=Application
+Categories=GNOME;GTK;Utility;
+Keywords=extensions;gnome-shell;update;github;gitlab;
+StartupNotify=true
