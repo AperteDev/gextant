@@ -379,7 +379,10 @@ fn set_status(row: &adw::ActionRow, icon: &gtk::Image, info: &ShellInfo) {
     }
     row.set_subtitle(state);
     icon.set_icon_name(Some(name));
-    row.add_css_class(class);
+    // `dim-label` fades what it is on, the button included: the icon only.
+    if class != "dim-label" {
+        row.add_css_class(class);
+    }
     icon.add_css_class(class);
 }
 
