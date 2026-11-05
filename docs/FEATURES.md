@@ -25,6 +25,14 @@ What Gextant can do, in short. The details of each release are in the
 - The portal is asked for your GNOME Shell's version, so its answer is exact.
 - Both answers stay when one fails or has nothing to say.
 
+**Updating**
+
+- In an extension's details, each source that has a newer version has an Update button: GitHub,
+  GitLab or the portal. It installs that version over yours, after checking the download (the
+  right extension, for your Shell, nothing outside its folder), and keeps your old copy as a
+  backup. The new version runs after you log out and in.
+- Only your extensions; the system's are not touched.
+
 **What a row shows**
 
 - Each place is an icon with the version it has: GitHub, GitLab or the GNOME mark for the portal.
@@ -59,7 +67,7 @@ What Gextant can do, in short. The details of each release are in the
 
 ## Planned
 
-- Updating an extension from its repository, by hand, with a check of what is downloaded.
+- Updating from the list too, and all at once.
 - A mode for each extension: not checked, checked, or updated automatically.
 - Installing an extension from a repository link.
 - Set the repository of an extension where none was found; mark what is installed.

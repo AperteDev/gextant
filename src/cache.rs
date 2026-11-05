@@ -102,6 +102,7 @@ mod tests {
         found(Upstream::Tag {
             tag: t.into(),
             source: Source::GitHub,
+            repo: String::new(),
         })
     }
 

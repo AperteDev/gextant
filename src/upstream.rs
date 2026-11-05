@@ -415,6 +415,9 @@ pub enum Upstream {
     Tag {
         tag: String,
         source: Source,
+        /// `host/path` of the repository, to install from. Empty in what an older run kept.
+        #[serde(default)]
+        repo: String,
     },
     NoRepo(Option<Source>),
     NoRelease(Source),
@@ -458,6 +461,7 @@ pub fn find(uuid: &str, url: Option<&str>, tokens: &Tokens) -> Result<Upstream, 
                 return Ok(Upstream::Tag {
                     tag: r.tag,
                     source: Source::of(&repo),
+                    repo: format!("{}/{}", repo.host, repo.path),
                 });
             }
             Ok(_) => {}

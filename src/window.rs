@@ -26,6 +26,9 @@ struct Checked {
     row: adw::ActionRow,
     /// Marks the row when a source has a newer version.
     update_icon: gtk::Image,
+    /// Updated here: the new version runs after the next login, and until then there is
+    /// nothing to check.
+    updated: Rc<Cell<bool>>,
 }
 
 impl Checked {
@@ -43,6 +46,9 @@ impl Checked {
     /// The installed version if no chip has it, a chip per version found (with the icons of the
     /// sources that have it), and what is to be said where a check has none.
     fn render(&self, view: View) {
+        if self.updated.get() {
+            return;
+        }
         self.clear();
         if let Some(installed) = &view.installed {
             self.holder.append(&installed_widget(installed));
@@ -51,14 +57,31 @@ impl Checked {
             self.holder.append(&chip_widget(chip));
         }
         let update = view.update();
-        self.update_icon.set_visible(update.is_some());
+        self.show_update_icon(update.is_some());
         self.update_icon
             .set_tooltip_text(update.map(|v| format!("Update available: {v}")).as_deref());
         *self.view.borrow_mut() = Some(view);
     }
 
+    /// Only in the row while there is an update: an empty prefix still takes room.
+    fn show_update_icon(&self, show: bool) {
+        match (show, self.update_icon.parent().is_some()) {
+            (true, false) => self.row.add_prefix(&self.update_icon),
+            (false, true) => self.row.remove(&self.update_icon),
+            _ => {}
+        }
+    }
+
+    fn mark_updated(&self) {
+        self.updated.set(true);
+        self.show_update_icon(false);
+        self.clear();
+        self.holder
+            .append(&label("Updated, log out to apply", "accent", None));
+    }
+
     fn has_update(&self) -> bool {
-        (self.view.borrow().as_ref()).is_some_and(|v| v.update().is_some())
+        !self.updated.get() && (self.view.borrow().as_ref()).is_some_and(|v| v.update().is_some())
     }
 }
 
@@ -173,6 +196,8 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
                 .unwrap(),
         ),
     ];
+    let restart_banner: adw::Banner = object("restart_banner").downcast().unwrap();
+    let window_title: adw::WindowTitle = object("window_title").downcast().unwrap();
     let all = extensions::installed();
     let shell = extensions::shell_major();
     let mut checked = Vec::new();
@@ -182,6 +207,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         for e in rows {
             let row = row(e);
             let view = Rc::new(RefCell::new(None));
+            let mut on_updated: Rc<dyn Fn()> = Rc::new(|| {});
             if let Some(shell) = shell.as_deref().filter(|s| !e.supports(s)) {
                 row.add_prefix(&incompatible_icon(e, shell));
             }
@@ -196,9 +222,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
                 let update_icon = gtk::Image::builder()
                     .icon_name("software-update-available-symbolic")
                     .css_classes(["accent"])
-                    .visible(false)
                     .build();
-                row.add_prefix(&update_icon);
                 checked.push(Checked {
                     uuid: e.uuid.clone(),
                     version_name: e.version_name.clone(),
@@ -208,13 +232,33 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
                     view: view.clone(),
                     row: row.clone(),
                     update_icon,
+                    updated: Rc::default(),
+                });
+                let (target, banner, title) = (
+                    checked.last().cloned().unwrap(),
+                    restart_banner.clone(),
+                    window_title.clone(),
+                );
+                on_updated = Rc::new(move || {
+                    target.mark_updated();
+                    banner.set_revealed(true);
+                    title.set_subtitle("");
                 });
             }
             row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
             row.set_activatable(true);
             row.connect_activated({
                 let (window, e, shell) = (window.clone(), e.clone(), shell.clone());
-                move |_| details::present(&window, &e, shell.as_deref(), view.borrow().as_ref())
+                move |_| {
+                    let view = view.borrow();
+                    details::present(
+                        &window,
+                        &e,
+                        shell.as_deref(),
+                        view.as_ref(),
+                        on_updated.clone(),
+                    )
+                }
             });
             group.add(&row);
         }
@@ -234,7 +278,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         cache: RefCell::new(Cache::load()),
         shell,
         group: groups[0].1.clone(),
-        title: object("window_title").downcast().unwrap(),
+        title: window_title,
     });
     button.connect_clicked({
         let checker = checker.clone();

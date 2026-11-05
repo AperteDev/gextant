@@ -192,7 +192,7 @@ fn read(dir: &Path, system: bool) -> Option<Extension> {
     Some(ext)
 }
 
-fn parse(text: &str, system: bool) -> Option<Extension> {
+pub(crate) fn parse(text: &str, system: bool) -> Option<Extension> {
     let serde_json::Value::Object(m) = serde_json::from_str(text).ok()? else {
         return None;
     };

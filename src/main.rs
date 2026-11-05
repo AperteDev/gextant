@@ -7,6 +7,7 @@ mod details;
 mod ego;
 mod extensions;
 mod gitlab;
+mod install;
 mod preferences;
 mod token;
 mod upstream;

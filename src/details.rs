@@ -2,11 +2,12 @@
 
 use crate::check::View;
 use crate::extensions::{self, Extension, ShellInfo};
+use crate::install;
 use crate::upstream::Version;
 use adw::prelude::*;
 use gtk::{gio, glib};
 use serde_json::Value;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 /// The keys shown by name; every other one goes under "Other Metadata".
@@ -47,6 +48,63 @@ fn icon_button(icon: &str, tip: &str, clicked: impl Fn(&gtk::Button) + 'static) 
         .css_classes(["flat"])
         .build();
     button.connect_clicked(clicked);
+    button
+}
+
+/// The button that installs `plan`'s version over `e`, with the mark of its source; it asks no
+/// more, but says what happened.
+fn update_button(
+    toasts: &adw::ToastOverlay,
+    e: &Extension,
+    shell: Option<&str>,
+    plan: install::Plan,
+    all: &Rc<RefCell<Vec<gtk::Button>>>,
+    on_updated: &Rc<dyn Fn()>,
+) -> gtk::Button {
+    let content = adw::ButtonContent::builder()
+        .icon_name(plan.source.icon())
+        .label("Update")
+        .build();
+    let button = gtk::Button::builder()
+        .child(&content)
+        .tooltip_text(format!("Update from {}", plan.source.name()))
+        .valign(gtk::Align::Center)
+        .css_classes(["suggested-action"])
+        .build();
+    let (toasts, e, shell) = (toasts.clone(), e.clone(), shell.map(str::to_owned));
+    let (all, on_updated, plan) = (all.clone(), on_updated.clone(), plan);
+    button.connect_clicked(move |_| {
+        for b in all.borrow().iter() {
+            b.set_sensitive(false);
+        }
+        content.set_label("Updating…");
+        let (content, toasts, all) = (content.clone(), toasts.clone(), all.clone());
+        let (e, shell, plan, on_updated) =
+            (e.clone(), shell.clone(), plan.clone(), on_updated.clone());
+        glib::spawn_future_local(async move {
+            let (e2, shell2, plan2) = (e.clone(), shell.clone(), plan.clone());
+            let result =
+                gio::spawn_blocking(move || install::update(&e2, &plan2, shell2.as_deref()))
+                    .await
+                    .unwrap_or_else(|_| Err("The update crashed".to_owned()));
+            match result {
+                Ok(version) => {
+                    content.set_label("Updated");
+                    content.set_icon_name("object-select-symbolic");
+                    let text = format!("Updated to {version}. Log out to apply it.");
+                    toasts.add_toast(adw::Toast::new(&text));
+                    on_updated();
+                }
+                Err(why) => {
+                    content.set_label("Update");
+                    for b in all.borrow().iter() {
+                        b.set_sensitive(true);
+                    }
+                    toasts.add_toast(adw::Toast::new(&format!("Could not update: {why}")));
+                }
+            }
+        });
+    });
     button
 }
 
@@ -156,6 +214,7 @@ pub fn present(
     e: &Extension,
     shell: Option<&str>,
     view: Option<&View>,
+    on_updated: Rc<dyn Fn()>,
 ) {
     let ui = gtk::Builder::from_resource("/dev/aperte/Gextant/details.ui");
     let object = |id: &str| {
@@ -278,6 +337,8 @@ pub fn present(
     }
 
     let source = object("source_group");
+    // All of them, to be switched off together while one is working.
+    let update_buttons: Rc<RefCell<Vec<gtk::Button>>> = Rc::default();
     let mut has_source = false;
     if let Some(url) = &e.url {
         has_source = true;
@@ -338,6 +399,20 @@ pub fn present(
         }
         row.add_prefix(&icons);
         row.add_css_class(chip.class());
+        // Where the version is newer than what is installed, a button for each source that has
+        // it (a user's extension only: a system one is not ours to change).
+        if !e.system && !chip.missing && chip.state == Version::Newer {
+            for (s, tag) in &chip.sources {
+                let plan = install::Plan {
+                    source: *s,
+                    repo: view.and_then(|v| v.repo.clone()),
+                    tag: tag.clone(),
+                };
+                let button = update_button(&toasts, e, shell, plan, &update_buttons, &on_updated);
+                row.add_suffix(&button);
+                update_buttons.borrow_mut().push(button);
+            }
+        }
         source.add(&row);
     }
     source.set_visible(has_source);

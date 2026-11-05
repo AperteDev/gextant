@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Update buttons in an extension's details, next to each source (GitHub, GitLab,
+  extensions.gnome.org) that has a newer version: the download is checked (the same extension,
+  for the running Shell, no path out of its folder), put in place of the installed one, which
+  is kept as a backup, and the window says to log out to apply it
 - An RPM for Fedora on COPR (`selfref/gextant`), built with each release
 - A warning icon on an extension that does not support the running GNOME Shell, its tooltip
   naming the versions it does

@@ -118,6 +118,13 @@ checked before the next, and the old copy untouched until the last:
    the new version runs after the next login. Whether the extension is enabled is not touched;
    its settings live in dconf and are not touched either.
 
+Built so far: the **Update** buttons in an extension's details, one for each source that has a
+newer version (GitHub, GitLab, extensions.gnome.org), with the steps above, except that the
+banner and the row only say that a login is needed. The work is in `$XDG_DATA_HOME/gextant/tmp`
+and the one backup kept in `…/gextant/backups/<uuid>`, on the same disk as the extensions (not
+in the Flatpak, whose own data folder is another disk). Not yet: **Update** on the row and
+**Update all**, the mode, `state.json`, and the zip check for a repository the user sets.
+
 **Update** as an extension's mode does the same by itself, when Gextant checks: on start and
 every few hours while it runs. (A background check without the window is [Later](#later).) It
 installs only what passes the checks above, and tells what it did.

@@ -110,6 +110,8 @@ pub struct View {
     /// The installed version, when no chip shows it already.
     pub installed: Option<String>,
     pub chips: Vec<Chip>,
+    /// `host/path` of the repository the upstream's version is from: where to install it from.
+    pub repo: Option<String>,
 }
 
 fn rank(v: Version) -> u8 {
@@ -155,7 +157,7 @@ pub fn view(checks: &Checks, version_name: Option<&str>, counter: Option<u64>) -
     };
     let mut entries: Vec<Entry> = Vec::new();
     entries.push(match &checks.upstream {
-        Ok(Upstream::Tag { tag, source }) => Entry::Version {
+        Ok(Upstream::Tag { tag, source, .. }) => Entry::Version {
             source: *source,
             raw: tag.clone(),
             version: display_version(tag, version_name, counter),
@@ -269,9 +271,14 @@ pub fn view(checks: &Checks, version_name: Option<&str>, counter: Option<u64>) -
     let shown = chips
         .iter()
         .any(|c| !c.missing && Some(&c.version) == installed.as_ref());
+    let repo = match &checks.upstream {
+        Ok(Upstream::Tag { repo, .. }) if !repo.is_empty() => Some(repo.clone()),
+        _ => None,
+    };
     View {
         installed: installed.filter(|_| !shown),
         chips,
+        repo,
     }
 }
 
@@ -283,6 +290,7 @@ mod tests {
         Ok(Upstream::Tag {
             tag: t.into(),
             source,
+            repo: String::new(),
         })
     }
 
