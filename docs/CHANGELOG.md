@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - An RPM for Fedora on COPR (`selfref/gextant`), built with each release
 - A warning icon on an extension that does not support the running GNOME Shell, its tooltip
   naming the versions it does
-- A details window, opened by clicking an extension: its description, UUID, version, folder,
+- A details window, opened by clicking an extension: its description (one line, expandable, with
+  basic Markdown shown), UUID, version, folder,
   the Shell versions it supports, the Shell's status for it (enabled, disabled, error, out of
   date) and a button to open its settings, its website, what the checks found, and the rest of its `metadata.json`; its buttons (copy the UUID, open the folder or the
   settings, open the website) answer with a toast

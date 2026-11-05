@@ -48,6 +48,93 @@ fn icon_button(icon: &str, tip: &str, clicked: impl Fn(&gtk::Button) + 'static) 
     button
 }
 
+/// `text` as Pango markup, for the part of Markdown descriptions use: `*`/`-` bullets, `#`
+/// headings, `**bold**`, `*italic*`, `_italic_`, `` `code` `` and links, written out or bare.
+fn markup(text: &str) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        let line = if let Some(item) = line.strip_prefix("* ").or_else(|| line.strip_prefix("- ")) {
+            format!("• {}", inline(item))
+        } else if line.starts_with('#') {
+            format!(
+                "<b>{}</b>",
+                inline(line.trim_start_matches('#').trim_start())
+            )
+        } else {
+            inline(line)
+        };
+        lines.push(line);
+    }
+    lines.join("\n")
+}
+
+fn esc(s: &str) -> String {
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+}
+
+/// `s` starts with `d` and has `d` again after some text that does not begin or end with a
+/// space: that text, and what follows.
+fn delimited<'a>(s: &'a str, d: &str) -> Option<(&'a str, &'a str)> {
+    let body = s.strip_prefix(d)?;
+    let end = body.find(d)?;
+    let inner = &body[..end];
+    let spaced = inner.starts_with(char::is_whitespace) || inner.ends_with(char::is_whitespace);
+    (!inner.is_empty() && !spaced).then(|| (inner, &body[end + d.len()..]))
+}
+
+fn link(url: &str, text: &str) -> String {
+    format!("<a href=\"{}\">{text}</a>", esc(url))
+}
+
+/// The markup for what starts `rest`, and what is left of it, if it starts a span or a link.
+/// `_` and `*` open italics only at the start of a word (not in `snake_case`).
+fn construct(rest: &str, word_start: bool) -> Option<(String, &str)> {
+    if let Some((i, after)) = delimited(rest, "**") {
+        return Some((format!("<b>{}</b>", inline(i)), after));
+    }
+    if let Some((i, after)) = delimited(rest, "`") {
+        return Some((format!("<tt>{}</tt>", esc(i)), after));
+    }
+    if word_start {
+        for d in ["*", "_"] {
+            if let Some((i, after)) = delimited(rest, d) {
+                return Some((format!("<i>{}</i>", inline(i)), after));
+            }
+        }
+    }
+    if let Some(r) = rest.strip_prefix('[') {
+        let (text, r) = r.split_once("](")?;
+        let (url, after) = r.split_once(')')?;
+        return url
+            .starts_with("http")
+            .then(|| (link(url, &inline(text)), after));
+    }
+    if rest.starts_with("http://") || rest.starts_with("https://") {
+        let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        let url = rest[..end].trim_end_matches(['.', ',', ';', ':', ')', '!', '?', '\'', '"']);
+        return Some((link(url, &esc(url)), &rest[url.len()..]));
+    }
+    None
+}
+
+fn inline(s: &str) -> String {
+    let (mut out, mut rest, mut prev) = (String::new(), s, ' ');
+    while let Some(c) = rest.chars().next() {
+        if let Some((html, after)) = construct(rest, !prev.is_alphanumeric()) {
+            out.push_str(&html);
+            (rest, prev) = (after, ' ');
+        } else {
+            out.push_str(&esc(c.encode_utf8(&mut [0; 4])));
+            (rest, prev) = (&rest[c.len_utf8()..], c);
+        }
+    }
+    out
+}
+
 fn value_text(v: &Value) -> String {
     match v {
         Value::String(s) => s.clone(),
@@ -79,7 +166,31 @@ pub fn present(
 
     let info = object("info_group");
     if let Some(d) = e.metadata.get("description") {
-        property(&info, "Description", &value_text(d));
+        let text = value_text(d);
+        let row = property(&info, "Description", "");
+        row.set_use_markup(true);
+        // One line, as the other rows, until expanded (each line of a label is cut on its own,
+        // so the collapsed text is one paragraph); only a longer text gets the button.
+        let (full, short) = (markup(&text), markup(&text).replace('\n', " "));
+        row.set_subtitle(&short);
+        row.set_subtitle_lines(1);
+        if text.contains('\n') || text.chars().count() > 60 {
+            let toggled = row.clone();
+            let button = icon_button("pan-down-symbolic", "Show All", move |button| {
+                let row = &toggled;
+                let expand = row.subtitle_lines() == 1;
+                row.set_subtitle(if expand { &full } else { &short });
+                row.set_subtitle_lines(if expand { 0 } else { 1 });
+                button.set_icon_name(if expand {
+                    "pan-up-symbolic"
+                } else {
+                    "pan-down-symbolic"
+                });
+                button.set_tooltip_text(Some(if expand { "Show Less" } else { "Show All" }));
+            });
+            button.set_valign(gtk::Align::Start);
+            row.add_suffix(&button);
+        }
     }
     let row = property(&info, "UUID", &e.uuid);
     row.add_suffix(&icon_button("edit-copy-symbolic", "Copy UUID", {
@@ -296,5 +407,22 @@ fn shell_rows(
                 });
             },
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::markup;
+
+    #[test]
+    fn markdown_to_pango() {
+        assert_eq!(
+            markup("# Hi\n* **a** & `b<c>`\n- _x_ snake_case_name"),
+            "<b>Hi</b>\n• <b>a</b> &amp; <tt>b&lt;c&gt;</tt>\n• <i>x</i> snake_case_name"
+        );
+        assert_eq!(
+            markup("See [docs](https://a.b/c) or (https://d.e/f), 2 * 3 * 4"),
+            "See <a href=\"https://a.b/c\">docs</a> or (<a href=\"https://d.e/f\">https://d.e/f</a>), 2 * 3 * 4"
+        );
     }
 }
