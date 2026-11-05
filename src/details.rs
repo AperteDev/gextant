@@ -249,16 +249,30 @@ fn shell_rows(
     uuid: &str,
     info: &ShellInfo,
 ) {
-    let state = match info.state {
-        1 => "Enabled",
-        2 => "Disabled",
-        3 => "Error",
-        4 => "Out of date",
-        _ => "Not loaded",
+    let (state, icon, class) = match info.state {
+        1 => ("Enabled", "object-select-symbolic", "success"),
+        2 => ("Disabled", "action-unavailable-symbolic", "dim-label"),
+        3 => ("Error", "dialog-error-symbolic", "error"),
+        4 => ("Out of date", "dialog-warning-symbolic", "warning"),
+        _ => ("Not loaded", "dialog-question-symbolic", "dim-label"),
     };
-    property(group, "Status", state);
+    let row = property(group, "Status", state);
+    row.add_prefix(
+        &gtk::Image::builder()
+            .icon_name(icon)
+            .css_classes([class])
+            .build(),
+    );
+    row.add_css_class(class);
     if !info.error.is_empty() {
-        property(group, "Error", &info.error);
+        let row = property(group, "Error", &info.error);
+        row.add_prefix(
+            &gtk::Image::builder()
+                .icon_name("dialog-error-symbolic")
+                .css_classes(["error"])
+                .build(),
+        );
+        row.add_css_class("error");
     }
     let row = property(
         group,
