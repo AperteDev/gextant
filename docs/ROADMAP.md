@@ -170,8 +170,7 @@ Roughly in this order, each with its own plan when it comes:
 - **Search** for extensions in repositories, to install from: where to search (GitHub topics
   such as `gnome-shell-extension`, a curated index, EGO's list only to *find* repositories) and
   how to judge what is worth showing are not decided yet; planned on their own.
-- **More packages**: Flathub (builds offline: a generated `cargo-sources.json`); an RPM for
-  Fedora (COPR, as Notav). The Flatpak has the extensions folder read-only: Updating needs it
+- **More packages**: Flathub (builds offline: a generated `cargo-sources.json`). The Flatpak has the extensions folder read-only: Updating needs it
   writable (`xdg-data/gnome-shell/extensions`), and the system's extensions
   (`/usr/share/gnome-shell/extensions`) are out of its reach unless it gets `host-os:ro`.
 - **A warning before the token expires**: the API tells when in its

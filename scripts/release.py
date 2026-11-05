@@ -2,7 +2,7 @@
 """Prepare a release: set the version in Cargo.toml and Cargo.lock, move the Unreleased changelog
 section under the new version, and print its notes for the GitHub release. The metainfo gets
 those notes too, and its screenshot is taken from the new tag (app stores want it from a tag,
-not a branch). The Release workflow runs it (and the CI, to build with the version set).
+not a branch); the RPM spec gets the version and a changelog entry. The Release workflow runs it (and the CI, to build with the version set).
 
     scripts/release.py 0.1.0 > notes.md
 """
@@ -144,6 +144,25 @@ def main() -> None:
     meta = ROOT / metainfo
     shot = r"(/gextant/)v[0-9.]+(/docs/screenshots/)"
     meta.write_text(re.sub(shot, rf"\g<1>v{version}\g<2>", meta.read_text()))
+
+    # The RPM spec: its version, and a changelog entry by whoever wrote the last one.
+    spec = "rpm/gextant.spec"
+    edit(spec, r"^(Version:\s+)\S+$", rf"\g<1>{version}")
+    edit(spec, r"^(Release:\s+)\d+", r"\g<1>1")
+    # C locale names (Python leaves LC_TIME alone), as RPM wants them.
+    day = datetime.date.today().strftime("%a %b %d %Y")
+    file = ROOT / spec
+    text = file.read_text()
+    last = re.search(r"^%changelog\n\* (\w+ \w+ \d+ \d+) (.+?) - (\S+)-\d+$", text, re.M)
+    if not last:
+        fail(f"{spec}: no %changelog entry to follow")
+    if last[3] == version:
+        # Written for this version before its release (the first one): today's date.
+        text = text[: last.start(1)] + day + text[last.end(1) :]
+    else:
+        at = last.start() + len("%changelog\n")
+        text = text[:at] + f"* {day} {last[2]} - {version}-1\n- See CHANGELOG.md\n\n" + text[at:]
+    file.write_text(text)
 
     print(notes)
     print(f"Prepared release {version}", file=sys.stderr)

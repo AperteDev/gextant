@@ -61,4 +61,4 @@ What Gextant can do, in short. The details of each release are in the
 - Repositories that publish no releases, followed by their branch.
 - Codeberg and other forges.
 - Searching for extensions.
-- Flathub and Fedora packages; translations.
+- Flathub; translations.

@@ -64,6 +64,8 @@ Gextant needs GNOME 48 or newer. Install it from:
 - **Arch Linux (AUR):** [`gextant`](https://aur.archlinux.org/packages/gextant) (built from the
   release), [`gextant-bin`](https://aur.archlinux.org/packages/gextant-bin) (the release's
   binary) or [`gextant-git`](https://aur.archlinux.org/packages/gextant-git) (the latest commit).
+- **Fedora:** `sudo dnf copr enable selfref/gextant`, then `sudo dnf install gextant`
+  ([COPR](https://copr.fedorainfracloud.org/coprs/selfref/gextant/)).
 - **Debian and Ubuntu:** the `.deb` of the [latest release](https://github.com/AperteDev/gextant/releases/latest)
   (built for Ubuntu 26.04).
 - **Flatpak:** the `.flatpak` bundle of the latest release, with
