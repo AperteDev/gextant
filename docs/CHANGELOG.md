@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-05
+
 ### Added
 
 - The extensions installed on this computer, in a list: the user's (in
@@ -42,4 +44,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Flatpak reads the user's extensions folder on the host (read-only) and asks the Shell for its
   version over D-Bus; it does not list the system's extensions
 
-[Unreleased]: https://github.com/AperteDev/gextant/commits/HEAD
+[Unreleased]: https://github.com/AperteDev/gextant/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/AperteDev/gextant/releases/tag/v0.1.0

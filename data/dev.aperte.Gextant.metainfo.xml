@@ -43,6 +43,22 @@
     <control>touch</control>
   </supports>
   <releases>
-    <release version="0.1.0" date="2026-11-05"/>
+    <release version="0.1.0" date="2026-11-05">
+      <url type="details">https://github.com/AperteDev/gextant/releases/tag/v0.1.0</url>
+      <description translate="no">
+        <p>Added</p>
+        <ul>
+          <li>The extensions installed on this computer, in a list: the user's (in <code>~/.local/share/gnome-shell/extensions</code>) first, then the system's, each with its name, UUID and version. Nothing is changed yet: the list only looks</li>
+          <li>A check for new versions of the user's extensions, when Gextant starts and from the refresh button, against two places asked separately: the extension's repository, found from the <code>url</code> in its <code>metadata.json</code> (GitHub and GitLab, including <code>*.github.io</code> and <code>*.gitlab.io</code> project pages, and a project page on another domain that links to the repository), and extensions.gnome.org (for the running GNOME Shell's version)</li>
+          <li>Each place shows as a chip, its icon with the version it has, in the colour of how it stands against what is installed: green if that is up to date, blue if it has something newer, grey if the two cannot be compared, yellow with a <code>?</code> where it has no version to give (no releases, a rate limit, a failed check, no repository found), the tooltip saying which. Places that agree make one chip with their icons together; the installed version shows by itself, with the computer icon, only where no chip has it. Long versions are shortened, in full in the tooltip</li>
+          <li>Versions are compared as the repository's tags say them (<code>v2.5.0</code>), or, for the many extensions that carry only the number extensions.gnome.org gave them, against that number where the tag has it too (<code>v66</code>, <code>extensions.gnome.org-v110</code>, <code>2.2.0+10</code>)</li>
+          <li>What was found is kept for 6 hours (a day where there is no repository), so a start does not ask every extension again; the refresh button always asks again</li>
+          <li>Repositories are read from the forge's own pages, which cost no API quota. Preferences keep an optional access token for GitHub and one for GitLab (gitlab.com only, never sent to another GitLab server) in the keyring, used when the pages are limited or do not know a private repository; each comes with a link that fills in the token's name and permissions</li>
+          <li>Banners when a forge's rate limit is used up (naming it, and offering Preferences where a token would help) and when a forge refuses a token (expired or revoked)</li>
+          <li>An About dialog in the main menu, with a Support page that links to where the development can be supported (Ko-fi, GitHub Sponsors, Liberapay)</li>
+          <li>Packages with each release: a Flatpak bundle, a tarball and a <code>.deb</code>, and the AUR packages <code>gextant</code>, <code>gextant-bin</code> and <code>gextant-git</code>; <code>make install</code> installs for the current user. The Flatpak reads the user's extensions folder on the host (read-only) and asks the Shell for its version over D-Bus; it does not list the system's extensions</li>
+        </ul>
+      </description>
+    </release>
   </releases>
 </component>
