@@ -386,6 +386,17 @@ fn set_status(row: &adw::ActionRow, icon: &gtk::Image, info: &ShellInfo) {
     icon.add_css_class(class);
 }
 
+/// The button that switches the extension: Enable in the accent colour, Disable plain (and not
+/// taking the colour of the row it is in).
+fn set_toggle(button: &gtk::Button, enabled: bool) {
+    button.set_label(if enabled { "Disable" } else { "Enable" });
+    button.set_css_classes(&[if enabled {
+        "neutral"
+    } else {
+        "suggested-action"
+    }]);
+}
+
 /// The Shell's state of the extension, with a button to switch it on or off where it supports
 /// the running Shell (and the Shell lets it be changed).
 fn shell_rows(
@@ -401,11 +412,8 @@ fn shell_rows(
     row.add_prefix(&icon);
     set_status(&row, &icon, info);
     if compatible && info.can_change {
-        let button = gtk::Button::builder()
-            .label(if info.enabled { "Disable" } else { "Enable" })
-            .valign(gtk::Align::Center)
-            .css_classes(["neutral"])
-            .build();
+        let button = gtk::Button::builder().valign(gtk::Align::Center).build();
+        set_toggle(&button, info.enabled);
         let enabled = Rc::new(Cell::new(info.enabled));
         let (ext, toasts, status, icon) = (ext.clone(), toasts.clone(), row.clone(), icon.clone());
         button.connect_clicked(move |button| {
@@ -441,7 +449,7 @@ fn shell_rows(
                 if let Some(now) = now {
                     set_status(&status, &icon, &now);
                     enabled.set(now.enabled);
-                    button.set_label(if now.enabled { "Disable" } else { "Enable" });
+                    set_toggle(&button, now.enabled);
                 }
                 button.set_sensitive(true);
             });
