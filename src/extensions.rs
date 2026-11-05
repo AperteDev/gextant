@@ -78,21 +78,23 @@ pub fn shell_info(e: &Extension) -> Option<ShellInfo> {
 }
 
 /// Ask the Shell to open `uuid`'s preferences, as the Extensions app does.
-pub fn open_prefs(uuid: &str) {
+pub fn open_prefs(uuid: &str) -> bool {
     let params = glib::Variant::tuple_from_iter([
         uuid.to_variant(),
         "".to_variant(),
         glib::VariantDict::new(None).end(),
     ]);
-    if let Some(proxy) = shell_proxy() {
-        let _ = proxy.call_sync(
-            "OpenExtensionPrefs",
-            Some(&params),
-            gio::DBusCallFlags::NONE,
-            2000,
-            gio::Cancellable::NONE,
-        );
-    }
+    shell_proxy().is_some_and(|proxy| {
+        proxy
+            .call_sync(
+                "OpenExtensionPrefs",
+                Some(&params),
+                gio::DBusCallFlags::NONE,
+                2000,
+                gio::Cancellable::NONE,
+            )
+            .is_ok()
+    })
 }
 
 impl Extension {

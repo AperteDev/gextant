@@ -31,6 +31,11 @@ fn property(group: &adw::PreferencesGroup, title: &str, value: &str) -> adw::Act
     row
 }
 
+/// Say what an action did or why it failed.
+fn toast(overlay: &adw::ToastOverlay, ok: bool, done: &str, failed: &str) {
+    overlay.add_toast(adw::Toast::new(if ok { done } else { failed }));
+}
+
 /// A flat icon button for a row's end.
 fn icon_button(icon: &str, tip: &str, clicked: impl Fn(&gtk::Button) + 'static) -> gtk::Button {
     let button = gtk::Button::builder()
@@ -70,6 +75,7 @@ pub fn present(
     };
     let dialog: adw::Dialog = ui.object("dialog").expect("dialog in details.blp");
     dialog.set_title(&e.name);
+    let toasts: adw::ToastOverlay = ui.object("toasts").expect("toasts in details.blp");
 
     let info = object("info_group");
     if let Some(d) = e.metadata.get("description") {
@@ -77,8 +83,11 @@ pub fn present(
     }
     let row = property(&info, "UUID", &e.uuid);
     row.add_suffix(&icon_button("edit-copy-symbolic", "Copy UUID", {
-        let uuid = e.uuid.clone();
-        move |button| button.clipboard().set_text(&uuid)
+        let (uuid, toasts) = (e.uuid.clone(), toasts.clone());
+        move |button| {
+            button.clipboard().set_text(&uuid);
+            toast(&toasts, true, "UUID copied", "");
+        }
     }));
     if let Some(v) = &e.version_name {
         property(&info, "Version", v).add_prefix(&gtk::Image::from_icon_name("computer-symbolic"));
@@ -98,12 +107,21 @@ pub fn present(
     );
     let row = property(&info, "Location", &e.path.display().to_string());
     row.add_suffix(&icon_button("folder-open-symbolic", "Open Folder", {
-        let (window, folder) = (window.clone(), gio::File::for_path(&e.path));
+        let (window, folder, toasts) =
+            (window.clone(), gio::File::for_path(&e.path), toasts.clone());
         move |_| {
+            let toasts = toasts.clone();
             gtk::FileLauncher::new(Some(&folder)).launch(
                 Some(&window),
                 None::<&gio::Cancellable>,
-                |_| {},
+                move |r| {
+                    toast(
+                        &toasts,
+                        r.is_ok(),
+                        "Folder opened",
+                        "Could not open the folder",
+                    )
+                },
             )
         }
     }));
@@ -148,12 +166,13 @@ pub fn present(
             let url = url.clone();
             row.add_suffix(&gtk::Image::from_icon_name("adw-external-link-symbolic"));
             row.set_activatable(true);
-            let window = window.clone();
+            let (window, toasts) = (window.clone(), toasts.clone());
             row.connect_activated(move |_| {
+                let toasts = toasts.clone();
                 gtk::UriLauncher::new(&url).launch(
                     Some(&window),
                     None::<&gio::Cancellable>,
-                    |_| {},
+                    move |r| toast(&toasts, r.is_ok(), "Link opened", "Could not open the link"),
                 );
             });
         }
@@ -215,15 +234,21 @@ pub fn present(
 
     // The Shell is asked off the main thread and answers after the dialog is up.
     let (ext, uuid) = (e.clone(), e.uuid.clone());
+    let toasts = toasts.clone();
     glib::spawn_future_local(async move {
         if let Ok(Some(info)) = gio::spawn_blocking(move || extensions::shell_info(&ext)).await {
-            shell_rows(&shell_group, &uuid, &info);
+            shell_rows(&shell_group, &toasts, &uuid, &info);
         }
     });
     dialog.present(Some(window));
 }
 
-fn shell_rows(group: &adw::PreferencesGroup, uuid: &str, info: &ShellInfo) {
+fn shell_rows(
+    group: &adw::PreferencesGroup,
+    toasts: &adw::ToastOverlay,
+    uuid: &str,
+    info: &ShellInfo,
+) {
     let state = match info.state {
         1 => "Enabled",
         2 => "Disabled",
@@ -241,13 +266,23 @@ fn shell_rows(group: &adw::PreferencesGroup, uuid: &str, info: &ShellInfo) {
         if info.has_prefs { "Yes" } else { "None" },
     );
     if info.has_prefs {
-        let uuid = uuid.to_owned();
+        let (uuid, toasts) = (uuid.to_owned(), toasts.clone());
         row.add_suffix(&icon_button(
             "emblem-system-symbolic",
             "Open Settings",
             move |_| {
-                let uuid = uuid.clone();
-                gio::spawn_blocking(move || extensions::open_prefs(&uuid));
+                let (uuid, toasts) = (uuid.clone(), toasts.clone());
+                glib::spawn_future_local(async move {
+                    let ok = gio::spawn_blocking(move || extensions::open_prefs(&uuid))
+                        .await
+                        .unwrap_or(false);
+                    toast(
+                        &toasts,
+                        ok,
+                        "Settings opened",
+                        "Could not open the settings",
+                    );
+                });
             },
         ));
     }

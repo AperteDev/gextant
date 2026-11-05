@@ -5,25 +5,27 @@ Adw.Dialog dialog {
   content-width: 560;
   content-height: 680;
 
-  child: Adw.ToolbarView {
-    [top]
-    Adw.HeaderBar {}
+  child: Adw.ToastOverlay toasts {
+    child: Adw.ToolbarView {
+      [top]
+      Adw.HeaderBar {}
 
-    content: Adw.PreferencesPage {
-      Adw.PreferencesGroup info_group {}
+      content: Adw.PreferencesPage {
+        Adw.PreferencesGroup info_group {}
 
-      Adw.PreferencesGroup shell_group {
-        title: "GNOME Shell";
-      }
+        Adw.PreferencesGroup shell_group {
+          title: "GNOME Shell";
+        }
 
-      Adw.PreferencesGroup source_group {
-        title: "Source";
-      }
+        Adw.PreferencesGroup source_group {
+          title: "Source";
+        }
 
-      Adw.PreferencesGroup metadata_group {
-        title: "Other Metadata";
-        description: "What else the extension's metadata.json says.";
-      }
+        Adw.PreferencesGroup metadata_group {
+          title: "Other Metadata";
+          description: "What else the extension's metadata.json says.";
+        }
+      };
     };
   };
 }
