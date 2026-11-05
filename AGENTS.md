@@ -28,3 +28,19 @@
 - To see and drive the app, use the `waydriver` MCP server: `start_session` with `command` the
   absolute path of `scripts/waydriver-app.sh` and `app_name` `gextant-waydriver`; build first
   (`cargo build`).
+
+## Releases
+
+- Add user-visible changes to `docs/CHANGELOG.md` under `## [Unreleased]`, in the same commit as
+  the change, in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)'s sections (`Added`,
+  `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security`).
+- Don't bump versions by hand: releases are cut by the manual Release workflow
+  (`.github/workflows/release.yml`, with the version as its input). `scripts/release.py` sets the
+  version in `Cargo.toml` and `Cargo.lock` and moves the `[Unreleased]` changes under it; the
+  workflow commits and tags that and publishes the GitHub release with them as its notes. It
+  goes on only if CI (`.github/workflows/ci.yml`: `cargo fmt --check`, clippy with warnings as
+  errors, the unit tests, all built with the version set) passes. Run the same checks before
+  committing.
+- There are no packages yet. When they come (Flatpak, AUR, `.deb`), the Release workflow gets
+  their jobs as in Notav's, and `scripts/release.py` the files that carry a version (metainfo,
+  spec), as Notav's does.
