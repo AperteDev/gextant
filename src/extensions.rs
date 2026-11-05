@@ -49,6 +49,8 @@ fn shell_proxy() -> Option<gio::DBusProxy> {
 pub struct ShellInfo {
     /// The Shell's `ExtensionState`: 1 active, 2 inactive, 3 error, 4 out of date, …
     pub state: u32,
+    pub enabled: bool,
+    pub can_change: bool,
     pub error: String,
     pub has_prefs: bool,
 }
@@ -72,8 +74,32 @@ pub fn shell_info(e: &Extension) -> Option<ShellInfo> {
     }
     Some(ShellInfo {
         state: m.get("state")?.get::<f64>()? as u32,
+        enabled: m.get("enabled")?.get()?,
+        can_change: m.get("canChange")?.get()?,
         error: m.get("error")?.str()?.to_owned(),
         has_prefs: m.get("hasPrefs")?.get()?,
+    })
+}
+
+/// Ask the Shell to switch `uuid` on or off, as the Extensions app does; whether it did.
+pub fn set_enabled(uuid: &str, enable: bool) -> bool {
+    let method = if enable {
+        "EnableExtension"
+    } else {
+        "DisableExtension"
+    };
+    shell_proxy().is_some_and(|proxy| {
+        proxy
+            .call_sync(
+                method,
+                Some(&(uuid,).to_variant()),
+                gio::DBusCallFlags::NONE,
+                2000,
+                gio::Cancellable::NONE,
+            )
+            .ok()
+            .and_then(|r| r.child_value(0).get::<bool>())
+            .unwrap_or(false)
     })
 }
 

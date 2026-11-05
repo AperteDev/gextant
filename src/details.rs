@@ -6,6 +6,8 @@ use crate::upstream::Version;
 use adw::prelude::*;
 use gtk::{gio, glib};
 use serde_json::Value;
+use std::cell::Cell;
+use std::rc::Rc;
 
 /// The keys shown by name; every other one goes under "Other Metadata".
 const KNOWN: [&str; 7] = [
@@ -351,37 +353,98 @@ pub fn present(
     other.set_visible(any);
 
     // The Shell is asked off the main thread and answers after the dialog is up.
-    let (ext, uuid) = (e.clone(), e.uuid.clone());
+    let (ext, ext2) = (e.clone(), e.clone());
+    let compatible = shell.is_some_and(|s| e.supports(s));
     let toasts = toasts.clone();
     glib::spawn_future_local(async move {
         if let Ok(Some(info)) = gio::spawn_blocking(move || extensions::shell_info(&ext)).await {
-            shell_rows(&shell_group, &toasts, &uuid, &info);
+            shell_rows(&shell_group, &toasts, &ext2, compatible, &info);
         }
     });
     dialog.present(Some(window));
 }
 
-fn shell_rows(
-    group: &adw::PreferencesGroup,
-    toasts: &adw::ToastOverlay,
-    uuid: &str,
-    info: &ShellInfo,
-) {
-    let (state, icon, class) = match info.state {
+/// Show the Shell's state on the status row: its text, icon and colour.
+fn set_status(row: &adw::ActionRow, icon: &gtk::Image, info: &ShellInfo) {
+    let (state, name, class) = match info.state {
         1 => ("Enabled", "object-select-symbolic", "success"),
         2 => ("Disabled", "action-unavailable-symbolic", "dim-label"),
         3 => ("Error", "dialog-error-symbolic", "error"),
         4 => ("Out of date", "dialog-warning-symbolic", "warning"),
         _ => ("Not loaded", "dialog-question-symbolic", "dim-label"),
     };
-    let row = property(group, "Status", state);
-    row.add_prefix(
-        &gtk::Image::builder()
-            .icon_name(icon)
-            .css_classes([class])
-            .build(),
-    );
+    for old in ["success", "dim-label", "error", "warning"] {
+        row.remove_css_class(old);
+        icon.remove_css_class(old);
+    }
+    row.set_subtitle(state);
+    icon.set_icon_name(Some(name));
     row.add_css_class(class);
+    icon.add_css_class(class);
+}
+
+/// The Shell's state of the extension, with a button to switch it on or off where it supports
+/// the running Shell (and the Shell lets it be changed).
+fn shell_rows(
+    group: &adw::PreferencesGroup,
+    toasts: &adw::ToastOverlay,
+    ext: &Extension,
+    compatible: bool,
+    info: &ShellInfo,
+) {
+    let uuid = ext.uuid.as_str();
+    let row = property(group, "Status", "");
+    let icon = gtk::Image::new();
+    row.add_prefix(&icon);
+    set_status(&row, &icon, info);
+    if compatible && info.can_change {
+        let button = gtk::Button::builder()
+            .label(if info.enabled { "Disable" } else { "Enable" })
+            .valign(gtk::Align::Center)
+            .css_classes(["neutral"])
+            .build();
+        let enabled = Rc::new(Cell::new(info.enabled));
+        let (ext, toasts, status, icon) = (ext.clone(), toasts.clone(), row.clone(), icon.clone());
+        button.connect_clicked(move |button| {
+            let enable = !enabled.get();
+            button.set_sensitive(false);
+            let (button, enabled, ext, toasts) =
+                (button.clone(), enabled.clone(), ext.clone(), toasts.clone());
+            let (status, icon) = (status.clone(), icon.clone());
+            glib::spawn_future_local(async move {
+                let e = ext.clone();
+                let (ok, now) = gio::spawn_blocking(move || {
+                    (
+                        extensions::set_enabled(&e.uuid, enable),
+                        extensions::shell_info(&e),
+                    )
+                })
+                .await
+                .unwrap_or((false, None));
+                toast(
+                    &toasts,
+                    ok,
+                    if enable {
+                        "Extension enabled"
+                    } else {
+                        "Extension disabled"
+                    },
+                    if enable {
+                        "Could not enable the extension"
+                    } else {
+                        "Could not disable the extension"
+                    },
+                );
+                if let Some(now) = now {
+                    set_status(&status, &icon, &now);
+                    enabled.set(now.enabled);
+                    button.set_label(if now.enabled { "Disable" } else { "Enable" });
+                }
+                button.set_sensitive(true);
+            });
+        });
+        row.add_suffix(&button);
+    }
     if !info.error.is_empty() {
         let row = property(group, "Error", &info.error);
         row.add_prefix(

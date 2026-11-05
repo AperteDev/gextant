@@ -149,8 +149,8 @@ checks); the UI is driven with the sandbox.
 
 Roughly in this order, each with its own plan when it comes:
 
-- **Switch on and off**: a switch in the row, through `org.gnome.Shell.Extensions`
-  (`EnableExtension`, `DisableExtension`), as the Extensions app does.
+- **Switch in the list**: the on/off switch also in each row of the list, as the Extensions
+  app has it (the details window has the button already).
 - **More details**: the release notes of the update on offer, and the backed-up version (the
   details window itself is built: metadata, Shell status, source and check results).
 - **More forges**: Codeberg and Forgejo, with the same checks; GitLab on a host not named

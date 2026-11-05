@@ -31,8 +31,16 @@ fn main() -> glib::ExitCode {
     gio::resources_register_include!("gextant.gresource").expect("resources");
     let app = adw::Application::builder().application_id(app_id()).build();
     app.connect_startup(|app| {
-        gtk::IconTheme::for_display(&gdk::Display::default().expect("display"))
-            .add_resource_path("/dev/aperte/Gextant/icons");
+        let display = gdk::Display::default().expect("display");
+        gtk::IconTheme::for_display(&display).add_resource_path("/dev/aperte/Gextant/icons");
+        // For a widget inside a coloured row (success, warning…) that should not take its colour.
+        let css = gtk::CssProvider::new();
+        css.load_from_string(".neutral { color: @window_fg_color; }");
+        gtk::style_context_add_provider_for_display(
+            &display,
+            &css,
+            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+        );
         let quit = gio::ActionEntry::builder("quit")
             .activate(|app: &adw::Application, _, _| app.quit())
             .build();
