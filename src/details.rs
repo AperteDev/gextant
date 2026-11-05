@@ -167,29 +167,39 @@ pub fn present(
     let info = object("info_group");
     if let Some(d) = e.metadata.get("description") {
         let text = value_text(d);
-        let row = property(&info, "Description", "");
-        row.set_use_markup(true);
-        // One line, as the other rows, until expanded (each line of a label is cut on its own,
-        // so the collapsed text is one paragraph); only a longer text gets the button.
         let (full, short) = (markup(&text), markup(&text).replace('\n', " "));
-        row.set_subtitle(&short);
-        row.set_subtitle_lines(1);
         if text.contains('\n') || text.chars().count() > 60 {
-            let toggled = row.clone();
-            let button = icon_button("pan-down-symbolic", "Show All", move |button| {
-                let row = &toggled;
-                let expand = row.subtitle_lines() == 1;
-                row.set_subtitle(if expand { &full } else { &short });
-                row.set_subtitle_lines(if expand { 0 } else { 1 });
-                button.set_icon_name(if expand {
-                    "pan-up-symbolic"
-                } else {
-                    "pan-down-symbolic"
-                });
-                button.set_tooltip_text(Some(if expand { "Show Less" } else { "Show All" }));
+            // One line, as the other rows (each line of a label is cut on its own, so it is
+            // one paragraph), until expanded to the whole text.
+            let row = adw::ExpanderRow::builder()
+                .title("Description")
+                .subtitle(&short)
+                .subtitle_lines(1)
+                .use_markup(true)
+                .build();
+            row.add_css_class("property");
+            row.add_row(
+                &gtk::Label::builder()
+                    .label(&full)
+                    .use_markup(true)
+                    .wrap(true)
+                    .selectable(true)
+                    .xalign(0.0)
+                    .margin_top(12)
+                    .margin_bottom(12)
+                    .margin_start(12)
+                    .margin_end(12)
+                    .build(),
+            );
+            // The whole text is shown below; the line above would only repeat it.
+            row.connect_expanded_notify(move |row| {
+                row.set_subtitle(if row.is_expanded() { "" } else { &short });
             });
-            button.set_valign(gtk::Align::Start);
-            row.add_suffix(&button);
+            info.add(&row);
+        } else {
+            let row = property(&info, "Description", "");
+            row.set_use_markup(true);
+            row.set_subtitle(&full);
         }
     }
     let row = property(&info, "UUID", &e.uuid);
