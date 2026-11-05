@@ -7,12 +7,12 @@
   update it in the same change: remove what is done, add a plan or an open question, move a
   dropped plan under "Ruled out" with why.
 
-## Siblings
+## Conventions
 
-- Gextant follows the conventions of Notav and Todav (`AperteDev/notav`, `AperteDev/todav`,
-  cloned next to this repository): app id `dev.aperte.Gextant`, Blueprint views in `ui/`,
-  GPL-3.0-or-later, sandbox copy for testing. When something is not decided here, look at how
-  they do it.
+- Gextant is an app of its own: it shares no code or data with other apps. Where a convention is
+  not decided here (repository layout, CI and release scripts, Blueprint views), look at how
+  `AperteDev/notav` or `AperteDev/todav` (cloned next to this repository) do it. Here: app id
+  `dev.aperte.Gextant`, Blueprint views in `ui/`, GPL-3.0-or-later, a sandbox copy for testing.
 
 ## Dependencies
 

@@ -175,7 +175,7 @@ Roughly in this order, each with its own plan when it comes:
   `gextant-bin`, `gextant-git`), `.deb`; the desktop file, metainfo and icon come with them.
 - **A warning before the token expires**: the API tells when in its
   `github-authentication-token-expiration` header (on any answer to the token).
-- **Translations** (gettext, Polish first), as the sibling apps do; CI (fmt, clippy, tests).
+- **Translations** (gettext, Polish first); CI (fmt, clippy, tests).
 
 ## Open questions and risks
 

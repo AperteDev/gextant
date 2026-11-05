@@ -16,9 +16,7 @@ Gextant is an app for the GNOME desktop that lists your GNOME Shell extensions a
 a newer version is out, without waiting for the review on extensions.gnome.org. It finds each
 extension's repository from its own `metadata.json`, reads the latest release from GitHub or
 GitLab, and compares it with what is installed and with what extensions.gnome.org has, so you see
-at a glance when the portal is behind. It is the sibling of
-[Notav](https://github.com/AperteDev/notav) and [Todav](https://github.com/AperteDev/todav),
-my notes and tasks apps.
+at a glance when the portal is behind.
 
 Gextant is at an early stage: it lists your extensions and checks them for updates, but it does
 not install or update anything yet; that is next (see the [roadmap](docs/ROADMAP.md)).
