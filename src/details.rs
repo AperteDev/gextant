@@ -214,16 +214,16 @@ pub fn present(
     other.set_visible(any);
 
     // The Shell is asked off the main thread and answers after the dialog is up.
-    let ext = e.clone();
+    let (ext, uuid) = (e.clone(), e.uuid.clone());
     glib::spawn_future_local(async move {
         if let Ok(Some(info)) = gio::spawn_blocking(move || extensions::shell_info(&ext)).await {
-            shell_rows(&shell_group, &info);
+            shell_rows(&shell_group, &uuid, &info);
         }
     });
     dialog.present(Some(window));
 }
 
-fn shell_rows(group: &adw::PreferencesGroup, info: &ShellInfo) {
+fn shell_rows(group: &adw::PreferencesGroup, uuid: &str, info: &ShellInfo) {
     let state = match info.state {
         1 => "Enabled",
         2 => "Disabled",
@@ -235,9 +235,20 @@ fn shell_rows(group: &adw::PreferencesGroup, info: &ShellInfo) {
     if !info.error.is_empty() {
         property(group, "Error", &info.error);
     }
-    property(
+    let row = property(
         group,
         "Settings",
         if info.has_prefs { "Yes" } else { "None" },
     );
+    if info.has_prefs {
+        let uuid = uuid.to_owned();
+        row.add_suffix(&icon_button(
+            "emblem-system-symbolic",
+            "Open Settings",
+            move |_| {
+                let uuid = uuid.clone();
+                gio::spawn_blocking(move || extensions::open_prefs(&uuid));
+            },
+        ));
+    }
 }

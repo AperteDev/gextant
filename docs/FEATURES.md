@@ -11,7 +11,7 @@ What Gextant can do, in short. The details of each release are in the
   with its name, UUID and version.
 - A warning icon, with a tooltip, on an extension that does not support your GNOME Shell's version.
 - Click an extension for its details: description, version, folder, supported Shell versions, the
-  Shell's status for it, website, what the checks found, and the rest of its metadata.
+  Shell's status for it with a button to open its settings, website, what the checks found, and the rest of its metadata.
 - Only looks: nothing is installed, updated or changed yet.
 
 **Checking for updates**
@@ -59,7 +59,7 @@ What Gextant can do, in short. The details of each release are in the
 - A mode for each extension: not checked, checked, or updated automatically.
 - Installing an extension from a repository link.
 - Set the repository of an extension where none was found; mark what is installed.
-- Switching an extension on and off; its settings button.
+- Switching an extension on and off.
 - Forcing an extension that does not support your Shell to load anyway (to be investigated).
 - Checking in the background, with a notification; going back to the previous version.
 - Repositories that publish no releases, followed by their branch.

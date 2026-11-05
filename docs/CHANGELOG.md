@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   naming the versions it does
 - A details window, opened by clicking an extension: its description, UUID, version, folder,
   the Shell versions it supports, the Shell's status for it (enabled, disabled, error, out of
-  date), its website, what the checks found, and the rest of its `metadata.json`
+  date) and a button to open its settings, its website, what the checks found, and the rest of its `metadata.json`
 
 ## [0.1.0] - 2026-11-05
 

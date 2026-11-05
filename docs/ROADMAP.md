@@ -153,8 +153,6 @@ Roughly in this order, each with its own plan when it comes:
   (`EnableExtension`, `DisableExtension`), as the Extensions app does.
 - **More details**: the release notes of the update on offer, and the backed-up version (the
   details window itself is built: metadata, Shell status, source and check results).
-- **Settings button**: opens the extension's preferences (`OpenExtensionPrefs`), as in the
-  screenshot of the Extensions app; shown only for extensions that have some.
 - **More forges**: Codeberg and Forgejo, with the same checks; GitLab on a host not named
   `gitlab.…`; later a plain git URL.
 - **Background checks**: a check without the window and a notification, for extensions in
