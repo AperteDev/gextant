@@ -96,15 +96,12 @@ pub fn present(
         property(&info, "Version Number", &c.to_string())
             .add_prefix(&gtk::Image::from_icon_name("gextant-gnome-symbolic"));
     }
-    property(
-        &info,
-        "Installed",
-        if e.system {
-            "For all users"
-        } else {
-            "For you only"
-        },
-    );
+    let (who, icon) = if e.system {
+        ("For all users", "system-users-symbolic")
+    } else {
+        ("For you only", "avatar-default-symbolic")
+    };
+    property(&info, "Installed", who).add_prefix(&gtk::Image::from_icon_name(icon));
     let row = property(&info, "Location", &e.path.display().to_string());
     row.add_suffix(&icon_button("folder-open-symbolic", "Open Folder", {
         let (window, folder, toasts) =
