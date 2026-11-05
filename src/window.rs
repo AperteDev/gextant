@@ -85,12 +85,12 @@ fn installed_widget(version: &str) -> gtk::Box {
 }
 
 /// A version with the icons of its sources, in the colour of how it stands against what is
-/// installed: green if that is up to date, yellow if the version is newer, grey if the two cannot
+/// installed: green if that is up to date, blue if the version is newer, grey if the two cannot
 /// be compared.
 fn chip_widget(chip: &Chip) -> gtk::Box {
     let class = match chip.state {
         Version::Same => "success",
-        Version::Newer => "warning",
+        Version::Newer => "accent",
         Version::Unknown => "dim-label",
     };
     let widget = gtk::Box::builder()
@@ -293,13 +293,8 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
                     .borrow_mut()
                     .put(&uuid, url.as_deref(), found, now);
             }
-            if checks.rate_limited() {
-                checker.banner.set_title(if have_token {
-                    "GitHub's rate limit is used up. Try again later."
-                } else {
-                    "GitHub's rate limit is used up. An access token raises it."
-                });
-                checker.banner.set_revealed(true);
+            if let Some(host) = checks.rate_limited() {
+                show_rate_limit(&checker.banner, host, have_token);
             }
             row.render(check::view(
                 &checks,
@@ -316,4 +311,19 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
             }
         });
     }
+}
+
+/// The banner for a host that has had enough: for GitHub without a token, the way to raise the
+/// limit; for the others (GitLab has no token here) only to wait.
+fn show_rate_limit(banner: &adw::Banner, host: &str, have_token: bool) {
+    let github = host.ends_with("github.com");
+    let help = github && !have_token;
+    let forge = if github { "GitHub" } else { host };
+    banner.set_title(&if help {
+        format!("{forge}'s rate limit is used up. An access token raises it.")
+    } else {
+        format!("{forge}'s rate limit is used up. Try again later.")
+    });
+    banner.set_button_label(help.then_some("Preferences"));
+    banner.set_revealed(true);
 }

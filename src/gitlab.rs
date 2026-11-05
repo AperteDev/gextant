@@ -1,7 +1,7 @@
 //! GitLab (gitlab.com, and hosts named `gitlab.…`): the latest release from the project's pages,
 //! as on GitHub; the API only to see the files of a release, when asked.
 
-use crate::upstream::{AGENT, Error, Release, Repo, first_tag, read, ships};
+use crate::upstream::{AGENT, Error, Release, Repo, first_tag, host_of, read, ships};
 use serde_json::Value;
 use ureq::ResponseExt;
 
@@ -20,7 +20,7 @@ pub fn latest(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error>
             .rsplit_once("/-/releases/")
             .map(|(_, t)| t.to_owned()),
         404 => None,
-        403 | 429 => return Err(Error::RateLimited),
+        403 | 429 => return Err(Error::RateLimited(host_of(&r))),
         s => return Err(Error::Other(format!("The server answered HTTP {s}"))),
     };
     let Some(tag) = tag else {

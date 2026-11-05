@@ -40,8 +40,12 @@ impl Checks {
         }
     }
 
-    pub fn rate_limited(&self) -> bool {
-        matches!(self.upstream, Err(Error::RateLimited))
+    /// The host that said too many requests were made, if one did.
+    pub fn rate_limited(&self) -> Option<&str> {
+        match &self.upstream {
+            Err(Error::RateLimited(host)) => Some(host),
+            _ => None,
+        }
     }
 }
 
@@ -133,11 +137,11 @@ pub fn view(checks: &Checks, version_name: Option<&str>, counter: Option<u64>) -
                 tip: None,
             })
         }
-        Err(Error::RateLimited) => {
+        Err(Error::RateLimited(host)) => {
             note = Some(Note {
                 text: "Rate limit reached",
                 class: "warning",
-                tip: None,
+                tip: Some(format!("{host} says too many requests were made")),
             })
         }
         Err(Error::Other(e)) => {
@@ -286,7 +290,7 @@ mod tests {
     #[test]
     fn a_limited_upstream_leaves_the_portal_chip() {
         let c = Checks {
-            upstream: Err(Error::RateLimited),
+            upstream: Err(Error::RateLimited("gitlab.com".into())),
             ego: Ok(Some(13)),
         };
         let v = view(&c, None, Some(13));

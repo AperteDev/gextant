@@ -15,7 +15,7 @@ two separate checks found, on start and from the header's refresh button: the up
 or GitLab) and extensions.gnome.org (EGO). Each shows as its latest version with its icon, the
 icon coloured as the version is. Sources that agree make one chip with two icons; those that
 differ sit side by side with their own versions. Green: what is installed is current for that
-source; yellow: that source has something newer; grey: the two cannot be compared. The
+source; blue: that source has something newer; grey: the two cannot be compared. The
 installed version is shown by itself, with the theme's computer icon
 (`computer-symbolic`, as Nautilus's My Computer extension uses), only where no chip has it. The generic
 globe is the theme's `globe-symbolic`, with a bundled one for themes that have none (Adwaita).
@@ -85,7 +85,8 @@ tag; `tags.atom` for repos that only tag; the assets page for a guessed reposito
 the fallback, and only with an access token (Preferences, kept in the keyring): when the pages
 are limited or do not know the repository (a private one). Downloads for updating should use
 `/releases/latest/download/<file>`, which costs no quota either. When even that is limited, a
-banner says so and opens Preferences. A second banner says when GitHub refuses the token
+banner says so, naming the host (GitLab's pages limit too: seen after a day of testing), and for
+GitHub without a token opens Preferences. A second banner says when GitHub refuses the token
 (expired or revoked), found with `/rate_limit`, once per check, which costs no quota. A 403 counts as a rate limit only when GitHub says so;
 otherwise its message is shown (a token that may not see a repository gets one). What was found is kept in the cache folder
 (`checks.json`): 6 hours for a release, 24 for "no repository" (which can cost a project

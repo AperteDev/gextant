@@ -122,8 +122,8 @@ pub(crate) struct Release {
 }
 
 pub enum Error {
-    /// GitHub's limit on requests was used up.
-    RateLimited,
+    /// The host (`github.com`, `gitlab.com`…) says too many requests were made.
+    RateLimited(String),
     /// The forge has no such repository for us: it does not exist, or it is private.
     Missing,
     Other(String),
@@ -137,9 +137,15 @@ impl From<ureq::Error> for Error {
 
 type Response = ureq::http::Response<ureq::Body>;
 
+/// The host that answered.
+pub(crate) fn host_of(r: &Response) -> String {
+    r.get_uri().host().unwrap_or("The server").to_owned()
+}
+
 /// The body of an answer; `None` for 404.
 pub(crate) fn read(mut r: Response) -> Result<Option<String>, Error> {
     let status = r.status().as_u16();
+    let host = host_of(&r);
     let limited = r
         .headers()
         .get("x-ratelimit-remaining")
@@ -152,19 +158,19 @@ pub(crate) fn read(mut r: Response) -> Result<Option<String>, Error> {
     match status {
         200..=299 => Ok(Some(body)),
         404 => Ok(None),
-        _ => Err(failure(status, limited, &body)),
+        _ => Err(failure(status, limited, &body, host)),
     }
 }
 
 /// What a failed answer means. A 403 is a rate limit only when GitHub says so (its headers, or
 /// its message): it also answers 403 to a token that may not see a repository, and to a burst
 /// of requests (the secondary limit, which says so in its message).
-fn failure(status: u16, limited: bool, body: &str) -> Error {
+fn failure(status: u16, limited: bool, body: &str, host: String) -> Error {
     if status == 401 {
         return Error::Other("GitHub refused the access token".into());
     }
     if status == 429 || (status == 403 && (limited || body.to_lowercase().contains("rate limit"))) {
-        return Error::RateLimited;
+        return Error::RateLimited(host);
     }
     let message = serde_json::from_str::<Value>(body)
         .ok()
@@ -185,7 +191,7 @@ pub fn latest(
         return crate::gitlab::latest(repo, uuid);
     }
     match (latest_web(repo, uuid), token) {
-        (Err(Error::RateLimited | Error::Missing), Some(token)) => latest_api(repo, token, uuid),
+        (Err(Error::RateLimited(_) | Error::Missing), Some(token)) => latest_api(repo, token, uuid),
         (r, _) => r,
     }
 }
@@ -270,7 +276,7 @@ fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error>
             .rsplit_once("/releases/tag/")
             .map(|(_, t)| t.to_owned()),
         404 => return Err(Error::Missing),
-        403 | 429 => return Err(Error::RateLimited),
+        403 | 429 => return Err(Error::RateLimited(host_of(&r))),
         s => return Err(Error::Other(format!("The server answered HTTP {s}"))),
     };
     let Some(tag) = tag else {
@@ -421,7 +427,7 @@ pub fn find(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Upstre
     let mut result = Ok(Upstream::NoRepo(Some(Source::Web)));
     for (repo, guessed) in candidates {
         match latest(&repo, token, guessed.then_some(uuid)) {
-            Err(Error::RateLimited) => return Err(Error::RateLimited),
+            Err(e @ Error::RateLimited(_)) => return Err(e),
             Err(Error::Missing) => {}
             Err(e) => result = Err(e),
             Ok(None) if !guessed => result = Ok(Upstream::NoRelease(Source::of(&repo))),
@@ -513,24 +519,31 @@ mod tests {
         };
         let denied = r#"{"message":"Resource not accessible by personal access token"}"#;
         assert_eq!(
-            msg(failure(403, false, denied)),
+            msg(failure(403, false, denied, "github.com".into())),
             "Resource not accessible by personal access token"
         );
-        assert_eq!(msg(failure(403, true, denied)), "limited");
+        assert_eq!(
+            msg(failure(403, true, denied, "github.com".into())),
+            "limited"
+        );
         assert_eq!(
             msg(failure(
                 403,
                 false,
-                r#"{"message":"You have exceeded a secondary rate limit."}"#
+                r#"{"message":"You have exceeded a secondary rate limit."}"#,
+                "github.com".into()
             )),
             "limited"
         );
-        assert_eq!(msg(failure(429, false, "")), "limited");
+        assert_eq!(msg(failure(429, false, "", "gitlab.com".into())), "limited");
         assert_eq!(
-            msg(failure(401, false, "")),
+            msg(failure(401, false, "", "github.com".into())),
             "GitHub refused the access token"
         );
-        assert_eq!(msg(failure(500, false, "")), "The server answered HTTP 500");
+        assert_eq!(
+            msg(failure(500, false, "", "github.com".into())),
+            "The server answered HTTP 500"
+        );
     }
 
     #[test]
