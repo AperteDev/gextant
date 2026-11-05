@@ -43,6 +43,40 @@ jobs:
       # Unit tests only: the checks that ask the forges are tried by running the app.
       - run: cargo test --locked
 
+  flatpak:
+    name: Flatpak
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set the release version
+        if: env.VERSION != ''
+        run: python3 scripts/release.py "$VERSION" > /dev/null
+      # flatpak-builder copies the sources (without target/) and builds them from scratch: Cargo's
+      # output is kept between runs instead, with the build's target/ linked to it. Only the CI's
+      # copy of the manifest is changed, local and Flathub builds stay as they are.
+      - name: Restore Cargo's build output
+        uses: actions/cache@v6
+        with:
+          path: target/flatpak-cargo
+          key: flatpak-cargo-${{ hashFiles('Cargo.lock') }}
+          restore-keys: flatpak-cargo-
+      - name: Build into it
+        run: |
+          dir="$PWD/target/flatpak-cargo"
+          mkdir -p "$dir"
+          manifest=flatpak/dev.aperte.Gextant.json
+          jq --arg dir "$dir" '."build-options"."build-args" += ["--filesystem=" + $dir]
+            | .modules[0]."build-commands" |= ["ln -sfn " + $dir + " target"] + .' \
+            "$manifest" > "$manifest.ci" && mv "$manifest.ci" "$manifest"
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: flatpak/dev.aperte.Gextant.json
+          bundle: dev.aperte.Gextant.flatpak
+          artifact-name: gextant-flatpak
+
   tarball:
     name: Tarball
     runs-on: ubuntu-24.04

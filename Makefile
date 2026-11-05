@@ -23,6 +23,13 @@ stage:
 	cargo build --release --locked
 	$(MAKE) install-data
 
+# Needs flatpak-builder (or the org.flatpak.Builder Flatpak); the build fetches crates over the
+# network. Flathub builds offline: add a generated cargo-sources.json when submitting.
+FLATPAK_BUILDER ?= $(shell command -v flatpak-builder || echo flatpak run org.flatpak.Builder)
+flatpak:
+	$(FLATPAK_BUILDER) --user --install --force-clean --install-deps-from=flathub \
+	  --state-dir=target/flatpak-builder target/flatpak flatpak/$(ID).json
+
 uninstall:
 	rm -f $(BINDIR)/gextant $(DATADIR)/applications/$(ID).desktop \
 	  $(DATADIR)/metainfo/$(ID).metainfo.xml \
@@ -38,4 +45,4 @@ sandbox:
 sandbox-reset:
 	rm -rf target/sandbox
 
-.PHONY: install install-data stage uninstall sandbox sandbox-reset
+.PHONY: install install-data stage flatpak uninstall sandbox sandbox-reset

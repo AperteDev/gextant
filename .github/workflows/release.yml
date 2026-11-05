@@ -42,7 +42,7 @@ jobs:
           pattern: gextant-*
           path: dist
           merge-multiple: true
-      # The tarball and the .deb.
+      # The Flatpak bundle, the tarball and the .deb.
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS

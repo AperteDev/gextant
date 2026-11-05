@@ -66,6 +66,9 @@ Gextant needs GNOME 48 or newer. Install it from:
   binary) or [`gextant-git`](https://aur.archlinux.org/packages/gextant-git) (the latest commit).
 - **Debian and Ubuntu:** the `.deb` of the [latest release](https://github.com/AperteDev/gextant/releases/latest)
   (built for Ubuntu 26.04).
+- **Flatpak:** the `.flatpak` bundle of the latest release, with
+  `flatpak install dev.aperte.Gextant.flatpak`. It reads your extensions' folder, not the
+  system's, so it lists the ones you installed.
 - **Any other distribution:** the release's tarball, extracted into `/`, or
   [build it from source](#building).
 

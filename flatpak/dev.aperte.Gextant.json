@@ -1,0 +1,40 @@
+{
+  "id": "dev.aperte.Gextant",
+  "runtime": "org.gnome.Platform",
+  "runtime-version": "51",
+  "sdk": "org.gnome.Sdk",
+  "sdk-extensions": ["org.freedesktop.Sdk.Extension.rust-stable"],
+  "command": "gextant",
+  "finish-args": [
+    "--share=ipc",
+    "--share=network",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--device=dri",
+    "--filesystem=xdg-data/gnome-shell/extensions:ro",
+    "--talk-name=org.gnome.Shell.Extensions",
+    "--talk-name=org.freedesktop.secrets"
+  ],
+  "build-options": {
+    "append-path": "/usr/lib/sdk/rust-stable/bin",
+    "env": { "CARGO_HOME": "/run/build/gextant/cargo" },
+    "build-args": ["--share=network"]
+  },
+  "modules": [
+    {
+      "name": "gextant",
+      "buildsystem": "simple",
+      "build-commands": [
+        "cargo build --release --locked",
+        "make install-data PREFIX=/app"
+      ],
+      "sources": [
+        {
+          "type": "dir",
+          "path": "..",
+          "skip": ["target", "tmp", ".git", ".env", ".flatpak-builder", "repo"]
+        }
+      ]
+    }
+  ]
+}
