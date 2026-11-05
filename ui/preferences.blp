@@ -4,7 +4,7 @@ using Adw 1;
 Adw.PreferencesDialog dialog {
   title: "Preferences";
   content-width: 640;
-  content-height: 360;
+  content-height: 520;
 
   Adw.PreferencesPage {
     Adw.PreferencesGroup {
@@ -12,6 +12,16 @@ Adw.PreferencesDialog dialog {
       description: "A personal access token raises GitHub's rate limit from 60 to 5,000 requests an hour. Create a fine-grained token <a href='https://github.com/settings/personal-access-tokens/new?name=Gextant&amp;expires_in=365&amp;description=Reads+the+releases+of+public+GNOME+Shell+extensions'>for public repositories</a> (set Repository access to Public repositories) or <a href='https://github.com/settings/personal-access-tokens/new?name=Gextant&amp;expires_in=365&amp;description=Reads+the+releases+of+GNOME+Shell+extensions,+private+ones+too&amp;contents=read'>for private ones too</a> (select them under Repository access; Contents: Read-only is filled in). The token lasts a year, the longest some organisations allow, and is kept in your keyring.";
 
       Adw.PasswordEntryRow token_row {
+        title: "Access Token";
+        show-apply-button: true;
+      }
+    }
+
+    Adw.PreferencesGroup {
+      title: "GitLab";
+      description: "A personal access token raises gitlab.com's rate limit and lets Gextant see your private projects. <a href='https://gitlab.com/-/user_settings/personal_access_tokens?name=Gextant&amp;description=Reads+the+releases+of+GNOME+Shell+extensions&amp;scopes=read_api'>Create a token</a> with the read_api scope; GitLab sets it to expire in a year. It is used for gitlab.com only, never for other GitLab servers, and is kept in your keyring.";
+
+      Adw.PasswordEntryRow gitlab_token_row {
         title: "Access Token";
         show-apply-button: true;
       }

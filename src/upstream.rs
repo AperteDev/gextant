@@ -1,6 +1,7 @@
 //! An extension's upstream: the repository its `url` names (GitHub or GitLab), its latest
 //! release, and whether that is newer than what is installed.
 
+use crate::token::Tokens;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::LazyLock;
@@ -167,7 +168,7 @@ pub(crate) fn read(mut r: Response) -> Result<Option<String>, Error> {
 /// of requests (the secondary limit, which says so in its message).
 fn failure(status: u16, limited: bool, body: &str, host: String) -> Error {
     if status == 401 {
-        return Error::Other("GitHub refused the access token".into());
+        return Error::Other("The server refused the access token".into());
     }
     if status == 429 || (status == 403 && (limited || body.to_lowercase().contains("rate limit"))) {
         return Error::RateLimited(host);
@@ -182,13 +183,10 @@ fn failure(status: u16, limited: bool, body: &str, host: String) -> Error {
 /// only when they fail is the API asked, if there is a `token`: when the pages are limited, or
 /// do not know the repository (a private one). GitLab: see `gitlab`. `uuid` asks whether the
 /// release ships that extension.
-pub fn latest(
-    repo: &Repo,
-    token: Option<&str>,
-    uuid: Option<&str>,
-) -> Result<Option<Release>, Error> {
+pub fn latest(repo: &Repo, tokens: &Tokens, uuid: Option<&str>) -> Result<Option<Release>, Error> {
+    let token = tokens.for_host(&repo.host);
     if repo.host != "github.com" {
-        return crate::gitlab::latest(repo, uuid);
+        return crate::gitlab::latest(repo, token, uuid);
     }
     match (latest_web(repo, uuid), token) {
         (Err(Error::RateLimited(_) | Error::Missing), Some(token)) => latest_api(repo, token, uuid),
@@ -217,10 +215,16 @@ pub fn token_refused(token: &str) -> bool {
         .is_ok_and(|r| r.status() == 401)
 }
 
-/// GET from the API with the token, `None` for 404. A moved repository answers 301 to its
-/// numeric URL: followed here, as the HTTP client drops the token on a redirect (and the
-/// anonymous request that follows is limited to 60 an hour).
-fn api_get(mut url: String, token: &str) -> Result<Option<Value>, Error> {
+/// The scheme and host of `url`: `https://api.github.com`.
+fn origin(url: &str) -> &str {
+    let start = url.find("://").map_or(0, |i| i + 3);
+    url[start..].find('/').map_or(url, |i| &url[..start + i])
+}
+
+/// GET from an API with a `token` header (`name`: `value`), `None` for 404. A moved repository
+/// answers 301 to its numeric URL: followed here, on the same host only, as the HTTP client
+/// drops the token on a redirect (and the anonymous request that follows is limited a lot more).
+pub(crate) fn api_get(mut url: String, header: (&str, String)) -> Result<Option<Value>, Error> {
     for _ in 0..3 {
         let r = AGENT
             .get(&url)
@@ -228,12 +232,12 @@ fn api_get(mut url: String, token: &str) -> Result<Option<Value>, Error> {
             .max_redirects(0)
             .max_redirects_will_error(false)
             .build()
-            .header("Accept", "application/vnd.github+json")
-            .header("Authorization", format!("Bearer {token}"))
+            .header("Accept", "application/json")
+            .header(header.0, &header.1)
             .call()?;
         let to = r.headers().get("location").and_then(|l| l.to_str().ok());
         if let (301 | 302 | 307 | 308, Some(to)) = (r.status().as_u16(), to)
-            && to.starts_with("https://api.github.com/")
+            && to.starts_with(origin(&url))
         {
             url = to.to_owned();
             continue;
@@ -249,7 +253,10 @@ fn api_get(mut url: String, token: &str) -> Result<Option<Value>, Error> {
 /// misread; pick by version number if it shows up.
 fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Release>, Error> {
     let path = &repo.path;
-    let api = |what: &str| api_get(format!("https://api.github.com/repos/{path}/{what}"), token);
+    let api = |what: &str| {
+        let url = format!("https://api.github.com/repos/{path}/{what}");
+        api_get(url, ("Authorization", format!("Bearer {token}")))
+    };
     if let Some(r) = api("releases/latest")? {
         let assets = r["assets"].as_array().into_iter().flatten();
         let ships = uuid.is_some_and(|u| ships(assets.filter_map(|a| a["name"].as_str()), u));
@@ -414,7 +421,7 @@ pub enum Upstream {
 }
 
 /// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release.
-pub fn find(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Upstream, Error> {
+pub fn find(uuid: &str, url: Option<&str>, tokens: &Tokens) -> Result<Upstream, Error> {
     let Some(url) = url else {
         return Ok(Upstream::NoRepo(None));
     };
@@ -426,7 +433,7 @@ pub fn find(uuid: &str, url: Option<&str>, token: Option<&str>) -> Result<Upstre
     };
     let mut result = Ok(Upstream::NoRepo(Some(Source::Web)));
     for (repo, guessed) in candidates {
-        match latest(&repo, token, guessed.then_some(uuid)) {
+        match latest(&repo, tokens, guessed.then_some(uuid)) {
             Err(e @ Error::RateLimited(_)) => return Err(e),
             Err(Error::Missing) => {}
             Err(e) => result = Err(e),
@@ -538,12 +545,21 @@ mod tests {
         assert_eq!(msg(failure(429, false, "", "gitlab.com".into())), "limited");
         assert_eq!(
             msg(failure(401, false, "", "github.com".into())),
-            "GitHub refused the access token"
+            "The server refused the access token"
         );
         assert_eq!(
             msg(failure(500, false, "", "github.com".into())),
             "The server answered HTTP 500"
         );
+    }
+
+    #[test]
+    fn the_origin_of_a_url() {
+        assert_eq!(
+            origin("https://api.github.com/repos/a/b"),
+            "https://api.github.com"
+        );
+        assert_eq!(origin("https://gitlab.com"), "https://gitlab.com");
     }
 
     #[test]

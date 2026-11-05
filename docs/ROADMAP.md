@@ -80,14 +80,19 @@ source archive if its `metadata.json` is at the root (or in a single subfolder).
 (a repo that needs `make`, meson or npm to produce the extension) shows "no release to
 install"; Gextant does not run build scripts (see [Ruled out](#ruled-out)).
 
-Checking spends no API quota: it reads github.com's pages (`/releases/latest` redirects to the
-tag; `tags.atom` for repos that only tag; the assets page for a guessed repository). The API is
-the fallback, and only with an access token (Preferences, kept in the keyring): when the pages
-are limited or do not know the repository (a private one). Downloads for updating should use
-`/releases/latest/download/<file>`, which costs no quota either. When even that is limited, a
-banner says so, naming the host (GitLab's pages limit too: seen after a day of testing), and for
-GitHub without a token opens Preferences. A second banner says when GitHub refuses the token
-(expired or revoked), found with `/rate_limit`, once per check, which costs no quota. A 403 counts as a rate limit only when GitHub says so;
+Checking spends no API quota: it reads the forge's pages (GitHub: `/releases/latest` redirects
+to the tag, `tags.atom` for repos that only tag, the assets page for a guessed repository;
+GitLab: `/-/releases/permalink/latest` and `/-/tags?format=atom`). The API is the fallback, and
+only with an access token (Preferences, each kept in the keyring): when the pages are limited or
+do not know the repository (a private one). A GitHub token raises its limit from 60 to 5,000 an
+hour. A GitLab token (scope `read_api`) is for gitlab.com only, never sent to another GitLab
+host; gitlab.com's limit on its pages is per IP and `unauthenticated_traffic_per_ip`, seen
+after a day of testing (an invalid token counts as none). Downloads for updating should use
+`/releases/latest/download/<file>` (GitHub), which costs no quota either. When even that is
+limited, a banner says so, naming the host, and where a token would raise the limit and there is
+none it opens Preferences. A second banner says when a forge refuses its token (expired or
+revoked), found with GitHub's `/rate_limit` (no quota) and GitLab's `/personal_access_tokens/self`,
+once per check. A 403 counts as a rate limit only when GitHub says so;
 otherwise its message is shown (a token that may not see a repository gets one). What was found is kept in the cache folder
 (`checks.json`): 6 hours for a release, 24 for "no repository" (which can cost a project
 page); the refresh button asks again anyway. Failures and rate limits are not kept, and the

@@ -2,6 +2,7 @@
 //! extensions.gnome.org (EGO); and what a row shows of both against what is installed.
 
 use crate::ego;
+use crate::token::Tokens;
 use crate::upstream::{
     self, Error, Source, Upstream, Version, compare, compare_counter, display_version,
 };
@@ -51,13 +52,13 @@ impl Checks {
 
 /// Ask both, at once: the upstream named by the metadata `url`, and EGO (for GNOME Shell `shell`,
 /// if known).
-pub fn run(uuid: &str, url: Option<&str>, token: Option<&str>, shell: Option<&str>) -> Checks {
+pub fn run(uuid: &str, url: Option<&str>, tokens: &Tokens, shell: Option<&str>) -> Checks {
     std::thread::scope(|s| {
         let ego = s.spawn(|| match shell {
             Some(shell) => ego::latest(uuid, shell),
             None => Ok(None),
         });
-        let upstream = upstream::find(uuid, url, token);
+        let upstream = upstream::find(uuid, url, tokens);
         let ego = ego
             .join()
             .unwrap_or_else(|_| Err(Error::Other("The check crashed".into())));

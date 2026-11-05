@@ -4,8 +4,9 @@
 use crate::cache::{self, Cache};
 use crate::check::{self, Checks, Chip, Found, View, abbreviate};
 use crate::extensions::{self, Extension};
+use crate::token::Tokens;
 use crate::upstream::{self, Version};
-use crate::{preferences, token};
+use crate::{gitlab, preferences};
 use adw::prelude::*;
 use gtk::{gio, glib};
 use std::cell::{Cell, RefCell};
@@ -117,8 +118,9 @@ struct Checker {
     rows: Vec<Checked>,
     button: gtk::Button,
     banner: adw::Banner,
-    /// For a token GitHub refuses.
+    /// For a token its forge refuses, and which forges (this run's).
     token_banner: adw::Banner,
+    refused: RefCell<Vec<&'static str>>,
     /// Counts the runs: a result from an older one (the token changed meanwhile) is dropped.
     run: Cell<u32>,
     cache: RefCell<Cache>,
@@ -182,6 +184,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         button: button.clone(),
         banner: object("banner").downcast().unwrap(),
         token_banner: object("token_banner").downcast().unwrap(),
+        refused: RefCell::new(Vec::new()),
         run: Cell::new(0),
         cache: RefCell::new(Cache::load()),
         shell: extensions::shell_major(),
@@ -234,6 +237,7 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
     checker.button.set_sensitive(false);
     checker.banner.set_revealed(false);
     checker.token_banner.set_revealed(false);
+    checker.refused.borrow_mut().clear();
     let now = cache::now();
     let cached: Vec<Option<Found>> = {
         let cache = checker.cache.borrow();
@@ -244,16 +248,19 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
             .map(|r| if force { None } else { get(r) })
             .collect()
     };
-    let token = token::load();
-    // Only when something is about to be asked of GitHub: the token matters then.
-    if let Some(token) = token.clone().filter(|_| cached.iter().any(Option::is_none)) {
-        let checker = checker.clone();
-        glib::spawn_future_local(async move {
-            let refused = gio::spawn_blocking(move || upstream::token_refused(&token)).await;
-            if matches!(refused, Ok(true)) && checker.run.get() == run {
-                checker.token_banner.set_revealed(true);
-            }
-        });
+    let tokens = Tokens::load();
+    // Only when something is about to be asked of a forge: the tokens matter then.
+    if cached.iter().any(Option::is_none) {
+        if let Some(token) = tokens.github.clone() {
+            refused_check(checker, run, "GitHub", move || {
+                upstream::token_refused(&token)
+            });
+        }
+        if let Some(token) = tokens.gitlab.clone() {
+            refused_check(checker, run, "GitLab", move || {
+                gitlab::token_refused(&token)
+            });
+        }
     }
     let pending = Rc::new(Cell::new(checker.rows.len()));
     for (r, cached) in checker.rows.iter().zip(cached) {
@@ -261,15 +268,15 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
             r.loading();
         }
         let (uuid, url) = (r.uuid.clone(), r.url.clone());
-        let token = token.clone();
+        let tokens = tokens.clone();
         let (row, checker, pending) = (r.clone(), checker.clone(), pending.clone());
         glib::spawn_future_local(async move {
-            let have_token = token.is_some();
+            let tokens_now = tokens.clone();
             let (u, url2, shell) = (uuid.clone(), url.clone(), checker.shell.clone());
             let (checks, fresh) = gio::spawn_blocking(move || match cached {
                 Some(found) => (Checks::from_found(found), false),
                 None => (
-                    check::run(&u, url2.as_deref(), token.as_deref(), shell.as_deref()),
+                    check::run(&u, url2.as_deref(), &tokens, shell.as_deref()),
                     true,
                 ),
             })
@@ -294,7 +301,7 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
                     .put(&uuid, url.as_deref(), found, now);
             }
             if let Some(host) = checks.rate_limited() {
-                show_rate_limit(&checker.banner, host, have_token);
+                show_rate_limit(&checker.banner, host, &tokens_now);
             }
             row.render(check::view(
                 &checks,
@@ -313,11 +320,41 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
     }
 }
 
-/// The banner for a host that has had enough: for GitHub without a token, the way to raise the
-/// limit; for the others (GitLab has no token here) only to wait.
-fn show_rate_limit(banner: &adw::Banner, host: &str, have_token: bool) {
+/// Ask `refused` (on a thread) whether `forge` refuses its token; if so, say so in the banner,
+/// with the other forge's if that is refused too.
+fn refused_check(
+    checker: &Rc<Checker>,
+    run: u32,
+    forge: &'static str,
+    refused: impl FnOnce() -> bool + Send + 'static,
+) {
+    let checker = checker.clone();
+    glib::spawn_future_local(async move {
+        if matches!(gio::spawn_blocking(refused).await, Ok(true)) && checker.run.get() == run {
+            let mut names = checker.refused.borrow_mut();
+            names.push(forge);
+            names.sort_unstable();
+            checker.token_banner.set_title(&match names.as_slice() {
+                [one] => format!("Your {one} access token expired or was revoked."),
+                _ => format!(
+                    "Your {} access tokens expired or were revoked.",
+                    names.join(" and ")
+                ),
+            });
+            checker.token_banner.set_revealed(true);
+        }
+    });
+}
+
+/// The banner for a host that has had enough: where a token would raise the limit (GitHub's, and
+/// gitlab.com's) and there is none, the way to add one; otherwise only to wait.
+fn show_rate_limit(banner: &adw::Banner, host: &str, tokens: &Tokens) {
     let github = host.ends_with("github.com");
-    let help = github && !have_token;
+    let help = if github {
+        tokens.github.is_none()
+    } else {
+        host == "gitlab.com" && tokens.gitlab.is_none()
+    };
     let forge = if github { "GitHub" } else { host };
     banner.set_title(&if help {
         format!("{forge}'s rate limit is used up. An access token raises it.")
