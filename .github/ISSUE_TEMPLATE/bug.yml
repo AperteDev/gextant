@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in Gextant does not work as it should
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Gextant
+        2. …
+  - type: input
+    id: extension
+    attributes:
+      label: Extension concerned
+      description: For a wrong or missing version, its UUID, the `url` in its `metadata.json`, and what the chips next to it show (their tooltips say why a version is missing).
+      placeholder: 'blur-my-shell@aunetx, https://github.com/aunetx/blur-my-shell'
+  - type: input
+    id: version
+    attributes:
+      label: Gextant version
+      description: Shown in About Gextant (main menu).
+      placeholder: '0.1.0'
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed from
+      options:
+        - Flatpak
+        - AUR
+        - .deb package
+        - Tarball
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Distribution and GNOME version
+      placeholder: 'Fedora 44, GNOME 50'
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: What Gextant prints when started from a terminal with `gextant` (Flatpak `flatpak run dev.aperte.Gextant`), after quitting the running one with Ctrl+Q.
+      render: text
