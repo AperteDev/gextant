@@ -37,9 +37,10 @@ development:
 ![The list of installed extensions, each with the versions found on GitHub, GitLab and extensions.gnome.org](docs/screenshots/extensions.png)
 
 Each place that has a version shows as its icon and number: GitHub, GitLab, or the GNOME mark for
-extensions.gnome.org. Green means what you have is current, blue that the place has something
-newer, grey that the two cannot be compared, and a yellow `?` that the place has no version to
-give (the tooltip says why).
+extensions.gnome.org. What you have being current is shown quietly, in plain grey and black; a
+place with something newer is a blue pill, and its extension gets an update icon, moves to the top
+of the list and is counted in the title. Grey means the two cannot be compared, and a yellow `?`
+that the place has no version to give (the tooltip says why).
 
 ## Features
 

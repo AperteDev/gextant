@@ -5,7 +5,7 @@ use crate::cache::{self, Cache};
 use crate::check::{self, Checks, Chip, Found, View, abbreviate};
 use crate::extensions::{self, Extension};
 use crate::token::Tokens;
-use crate::upstream;
+use crate::upstream::{self, Version};
 use crate::{details, gitlab, preferences};
 use adw::prelude::*;
 use gtk::{gio, glib};
@@ -23,6 +23,9 @@ struct Checked {
     holder: gtk::Box,
     /// What the last check showed, for the details.
     view: Rc<RefCell<Option<View>>>,
+    row: adw::ActionRow,
+    /// Marks the row when a source has a newer version.
+    update_icon: gtk::Image,
 }
 
 impl Checked {
@@ -47,14 +50,26 @@ impl Checked {
         for chip in &view.chips {
             self.holder.append(&chip_widget(chip));
         }
+        let update = view.update();
+        self.update_icon.set_visible(update.is_some());
+        self.update_icon
+            .set_tooltip_text(update.map(|v| format!("Update available: {v}")).as_deref());
         *self.view.borrow_mut() = Some(view);
+    }
+
+    fn has_update(&self) -> bool {
+        (self.view.borrow().as_ref()).is_some_and(|v| v.update().is_some())
     }
 }
 
 fn label(text: &str, class: &str, tip: Option<&str>) -> gtk::Label {
     gtk::Label::builder()
         .label(text)
-        .css_classes([class])
+        .css_classes(if class.is_empty() {
+            vec![]
+        } else {
+            vec![class]
+        })
         .ellipsize(gtk::pango::EllipsizeMode::End)
         .max_width_chars(24)
         .tooltip_text(tip.unwrap_or_default())
@@ -85,25 +100,32 @@ fn installed_widget(version: &str) -> gtk::Box {
 }
 
 /// A version with the icons of its sources, in the colour of how it stands against what is
-/// installed: green if that is up to date, blue if the version is newer, grey if the two cannot
-/// be compared; yellow with a `?` where the source has no version.
+/// installed: quiet where that is up to date (the icons dimmed, the version plain), blue in a
+/// pill if the version is newer, grey if the two cannot be compared; yellow with a `?` where
+/// the source has no version.
 fn chip_widget(chip: &Chip) -> gtk::Box {
-    let class = chip.class();
+    let (icons, text) = match (chip.missing, chip.state) {
+        (false, Version::Same) => ("dim-label", ""),
+        _ => (chip.class(), chip.class()),
+    };
     let widget = gtk::Box::builder()
         .spacing(4)
         .valign(gtk::Align::Center)
         .tooltip_text(&chip.tip)
         .build();
+    if !chip.missing && chip.state == Version::Newer {
+        widget.add_css_class("update-chip");
+    }
     for (source, _) in &chip.sources {
         widget.append(
             &gtk::Image::builder()
                 .icon_name(source.icon())
                 .pixel_size(16)
-                .css_classes([class])
+                .css_classes([icons])
                 .build(),
         );
     }
-    widget.append(&label(&abbreviate(&chip.version), class, Some(&chip.tip)));
+    widget.append(&label(&abbreviate(&chip.version), text, Some(&chip.tip)));
     widget
 }
 
@@ -121,6 +143,9 @@ struct Checker {
     cache: RefCell<Cache>,
     /// The running Shell's major version, for extensions.gnome.org.
     shell: Option<String>,
+    /// The user's extensions, where the ones with an update go first, and the count in the title.
+    group: adw::PreferencesGroup,
+    title: adw::WindowTitle,
 }
 
 pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
@@ -168,6 +193,12 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
                     .valign(gtk::Align::Center)
                     .build();
                 row.add_suffix(&holder);
+                let update_icon = gtk::Image::builder()
+                    .icon_name("software-update-available-symbolic")
+                    .css_classes(["accent"])
+                    .visible(false)
+                    .build();
+                row.add_prefix(&update_icon);
                 checked.push(Checked {
                     uuid: e.uuid.clone(),
                     version_name: e.version_name.clone(),
@@ -175,6 +206,8 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
                     url: e.url.clone(),
                     holder,
                     view: view.clone(),
+                    row: row.clone(),
+                    update_icon,
                 });
             }
             row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
@@ -200,6 +233,8 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         run: Cell::new(0),
         cache: RefCell::new(Cache::load()),
         shell,
+        group: groups[0].1.clone(),
+        title: object("window_title").downcast().unwrap(),
     });
     button.connect_clicked({
         let checker = checker.clone();
@@ -337,6 +372,7 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
             pending.set(pending.get() - 1);
             if pending.get() == 0 {
                 checker.button.set_sensitive(true);
+                show_updates(&checker);
                 let mut cache = checker.cache.borrow_mut();
                 let uuids: Vec<&str> = checker.rows.iter().map(|r| r.uuid.as_str()).collect();
                 cache.retain(&uuids);
@@ -389,4 +425,33 @@ fn show_rate_limit(banner: &adw::Banner, host: &str, tokens: &Tokens) {
     });
     banner.set_button_label(help.then_some("Preferences"));
     banner.set_revealed(true);
+}
+
+/// Say in the title how many have an update, and put those first in the list (the order of the
+/// rest kept).
+fn show_updates(checker: &Checker) {
+    let (first, rest): (Vec<&Checked>, Vec<&Checked>) =
+        checker.rows.iter().partition(|r| r.has_update());
+    checker.title.set_subtitle(&match first.len() {
+        0 => String::new(),
+        1 => "1 update available".to_owned(),
+        n => format!("{n} updates available"),
+    });
+    for r in &checker.rows {
+        checker.group.remove(&r.row);
+    }
+    let any = !first.is_empty();
+    for r in first.into_iter().chain(rest) {
+        checker.group.add(&r.row);
+    }
+    // Taking the rows out leaves the page scrolled to somewhere else.
+    if any
+        && let Some(page) = checker
+            .group
+            .ancestor(adw::PreferencesPage::static_type())
+            .and_downcast::<adw::PreferencesPage>()
+    {
+        // After the layout: now the page would be put back to where focus was.
+        glib::idle_add_local_once(move || page.scroll_to_top());
+    }
 }

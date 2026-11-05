@@ -14,8 +14,9 @@ system's (`/usr/share`, no actions: they cannot be updated by the user), and for
 two separate checks found, on start and from the header's refresh button: the upstream (GitHub
 or GitLab) and extensions.gnome.org (EGO). Each shows as its latest version with its icon, the
 icon coloured as the version is. Sources that agree make one chip with two icons; those that
-differ sit side by side with their own versions. Green: what is installed is current for that
-source; blue: that source has something newer; grey: the two cannot be compared. The
+differ sit side by side with their own versions. Current: quiet (dimmed icon, plain
+version); blue, in a pill: that source has something newer, and the row gets an update icon, goes
+first and is counted in the title; grey: the two cannot be compared. The
 installed version is shown by itself, with the theme's computer icon
 (`computer-symbolic`, as Nautilus's My Computer extension uses), only where no chip has it. A
 long version is cut to 12 characters; the whole one is in the tooltip. Where a source has no

@@ -9,6 +9,10 @@ Adw.ApplicationWindow window {
   content: Adw.ToolbarView {
     [top]
     Adw.HeaderBar {
+      title-widget: Adw.WindowTitle window_title {
+        title: "Gextant";
+      };
+
       [start]
       Gtk.Button refresh_button {
         icon-name: "view-refresh-symbolic";

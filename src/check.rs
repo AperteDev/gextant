@@ -95,6 +95,17 @@ impl Chip {
     }
 }
 
+impl View {
+    /// The version a source has that is newer than what is installed, if one has.
+    pub fn update(&self) -> Option<&str> {
+        let chip = self
+            .chips
+            .iter()
+            .find(|c| !c.missing && c.state == Version::Newer)?;
+        Some(&chip.version)
+    }
+}
+
 pub struct View {
     /// The installed version, when no chip shows it already.
     pub installed: Option<String>,

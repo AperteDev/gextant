@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- An update stands out in the list: what is up to date is shown quietly (no longer green), a
+  newer version is a blue pill, its extension has an update icon and moves to the top, and the
+  title says how many updates there are
+
 ### Added
 
 - An RPM for Fedora on COPR (`selfref/gextant`), built with each release

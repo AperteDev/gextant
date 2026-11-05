@@ -33,9 +33,14 @@ fn main() -> glib::ExitCode {
     app.connect_startup(|app| {
         let display = gdk::Display::default().expect("display");
         gtk::IconTheme::for_display(&display).add_resource_path("/dev/aperte/Gextant/icons");
-        // For a widget inside a coloured row (success, warning…) that should not take its colour.
+        // `neutral`: for a widget inside a coloured row (success, warning…) that should not take its
+        // colour. `update-chip`: a version newer than the installed one, to be seen in the list.
         let css = gtk::CssProvider::new();
-        css.load_from_string(".neutral { color: @window_fg_color; }");
+        css.load_from_string(
+            ".neutral { color: @window_fg_color; }
+             .update-chip { background-color: alpha(@accent_bg_color, 0.2); border-radius: 999px;
+                            padding: 2px 10px; font-weight: bold; }",
+        );
         gtk::style_context_add_provider_for_display(
             &display,
             &css,

@@ -28,8 +28,11 @@ What Gextant can do, in short. The details of each release are in the
 **What a row shows**
 
 - Each place is an icon with the version it has: GitHub, GitLab or the GNOME mark for the portal.
-- Green: what you have is current. Blue: that place has something newer. Grey: the two cannot be
-  compared. Yellow with a `?`: that place has no version to give; the tooltip says why.
+- Quiet (dimmed icon, plain version): what you have is current. A blue pill: that place has
+  something newer. Grey: the two cannot be compared. Yellow with a `?`: that place has no version
+  to give; the tooltip says why.
+- An extension with an update gets an update icon, goes to the top of the list, and the title says
+  how many there are.
 - Places that agree on a version share one chip, so a repository ahead of the portal shows as two.
 - Your installed version, with a computer icon, shows by itself only where no chip has it.
 - Long versions are shortened, in full in the tooltip.
