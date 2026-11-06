@@ -208,6 +208,9 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
             let row = row(e);
             let view = Rc::new(RefCell::new(None));
             let mut on_updated: Rc<dyn Fn()> = Rc::new(|| {});
+            if let Some(note) = e.shadow_note() {
+                row.add_prefix(&warning_icon(&note));
+            }
             if let Some(shell) = shell.as_deref().filter(|s| !e.supports(s)) {
                 row.add_prefix(&incompatible_icon(e, shell));
             }
@@ -303,6 +306,15 @@ fn row(e: &Extension) -> adw::ActionRow {
         .title(&e.name)
         .subtitle(&e.uuid)
         .use_markup(false)
+        .build()
+}
+
+/// The mark on a row that has something to say, in its tooltip.
+fn warning_icon(tip: &str) -> gtk::Image {
+    gtk::Image::builder()
+        .icon_name("dialog-warning-symbolic")
+        .css_classes(["warning"])
+        .tooltip_text(tip)
         .build()
 }
 

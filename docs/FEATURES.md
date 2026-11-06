@@ -31,7 +31,10 @@ What Gextant can do, in short. The details of each release are in the
   GitLab or the portal. It installs that version over yours, after checking the download (the
   right extension, for your Shell, nothing outside its folder), and keeps your old copy as a
   backup. The new version runs after you log out and in.
-- Only your extensions; the system's are not touched.
+- Only your extensions; the system's are not touched. Where yours is a link (a package linked
+  into your folder), you are asked first, as an update replaces the link with a copy.
+- A system extension that your folder shadows (the Shell loads yours) is listed with a warning
+  icon and says so in its details.
 
 **What a row shows**
 

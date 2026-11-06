@@ -73,15 +73,35 @@ fn update_button(
         .build();
     let (toasts, e, shell) = (toasts.clone(), e.clone(), shell.map(str::to_owned));
     let (all, on_updated, plan) = (all.clone(), on_updated.clone(), plan);
-    button.connect_clicked(move |_| {
-        for b in all.borrow().iter() {
-            b.set_sensitive(false);
-        }
-        content.set_label("Updating…");
-        let (content, toasts, all) = (content.clone(), toasts.clone(), all.clone());
+    button.connect_clicked(move |button| {
+        let (button, content, toasts, all) =
+            (button.clone(), content.clone(), toasts.clone(), all.clone());
         let (e, shell, plan, on_updated) =
             (e.clone(), shell.clone(), plan.clone(), on_updated.clone());
         glib::spawn_future_local(async move {
+            // A link (a package linked into the user's folder) is replaced by a copy of its
+            // own: after that, the package's updates no longer reach it.
+            if let Ok(target) = std::fs::read_link(&e.path) {
+                let dialog = adw::AlertDialog::new(
+                    Some("Replace the link?"),
+                    Some(&format!(
+                        "{} is a link to {}, probably a package. Updating replaces the link with a copy of its own: the package's updates will no longer reach it until that copy is removed. The link is kept in the backups.",
+                        e.name,
+                        target.display()
+                    )),
+                );
+                dialog.add_responses(&[("cancel", "Cancel"), ("replace", "Replace")]);
+                dialog.set_response_appearance("replace", adw::ResponseAppearance::Destructive);
+                dialog.set_default_response(Some("cancel"));
+                dialog.set_close_response("cancel");
+                if dialog.choose_future(Some(&button)).await != "replace" {
+                    return;
+                }
+            }
+            for b in all.borrow().iter() {
+                b.set_sensitive(false);
+            }
+            content.set_label("Updating…");
             let (e2, shell2, plan2) = (e.clone(), shell.clone(), plan.clone());
             let result =
                 gio::spawn_blocking(move || install::update(&e2, &plan2, shell2.as_deref()))
@@ -306,6 +326,16 @@ pub fn present(
     }));
 
     let shell_group = object("shell_group");
+    if let Some(note) = e.shadow_note() {
+        let row = property(&shell_group, "Shadowed", &note);
+        row.add_prefix(
+            &gtk::Image::builder()
+                .icon_name("dialog-warning-symbolic")
+                .css_classes(["warning"])
+                .build(),
+        );
+        row.add_css_class("warning");
+    }
     let supported = if e.shell_versions.is_empty() {
         "Not stated".to_owned()
     } else {

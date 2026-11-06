@@ -21,6 +21,9 @@ pub struct Extension {
     pub path: PathBuf,
     /// The whole `metadata.json`, for the details.
     pub metadata: serde_json::Map<String, serde_json::Value>,
+    /// Another copy of this UUID is found first, so the Shell loads that one: its folder, and
+    /// whether it is a system one.
+    pub shadowed_by: Option<(PathBuf, bool)>,
     /// From a system data dir (`/usr/share`), not the user's: not ours to update.
     pub system: bool,
 }
@@ -134,6 +137,23 @@ impl Extension {
                 .any(|v| v.split('.').next() == Some(shell))
     }
 
+    /// Why this copy is not the one in use, if another is: where that one is, and whether it is
+    /// a link to this one (a package linked into the user's folder).
+    pub fn shadow_note(&self) -> Option<String> {
+        let (path, system) = self.shadowed_by.as_ref()?;
+        let whose = if *system { "The system's" } else { "Your" };
+        let linked = std::fs::canonicalize(path).ok() == std::fs::canonicalize(&self.path).ok();
+        let how = if linked {
+            "a link to this one"
+        } else {
+            "used instead"
+        };
+        Some(format!(
+            "Not in use: {whose} copy in {} is {how}",
+            path.display()
+        ))
+    }
+
     /// What to show: the `version-name`, else the counter.
     pub fn version(&self) -> Option<String> {
         self.version_name
@@ -156,8 +176,8 @@ fn in_flatpak() -> bool {
     Path::new("/.flatpak-info").exists()
 }
 
-/// The user's extensions, then the system's. A UUID found twice is listed once, from the first
-/// place, the user's, as the Shell loads it. A Flatpak sees the runtime's `/usr/share`, not the
+/// The user's extensions, then the system's. A UUID found twice is listed twice: the first,
+/// the user's, is the one the Shell loads; the other says it is shadowed. A Flatpak sees the runtime's `/usr/share`, not the
 /// host's, so it lists the user's only.
 pub fn installed() -> Vec<Extension> {
     let user = std::iter::once((user_data_dir(), false));
@@ -173,9 +193,11 @@ pub fn installed() -> Vec<Extension> {
             continue;
         };
         for entry in entries.flatten() {
-            if let Some(ext) = read(&entry.path(), system)
-                && !found.iter().any(|e| e.uuid == ext.uuid)
-            {
+            if let Some(mut ext) = read(&entry.path(), system) {
+                ext.shadowed_by = found
+                    .iter()
+                    .find(|e| e.uuid == ext.uuid)
+                    .map(|e| (e.path.clone(), e.system));
                 found.push(ext);
             }
         }
@@ -214,6 +236,7 @@ pub(crate) fn parse(text: &str, system: bool) -> Option<Extension> {
             })
             .unwrap_or_default(),
         path: PathBuf::new(),
+        shadowed_by: None,
         metadata: m,
         system,
     })
