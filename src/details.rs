@@ -326,8 +326,10 @@ pub fn present(
     }));
 
     let shell_group = object("shell_group");
+    let status_group = object("status_group");
     if let Some(note) = e.shadow_note() {
-        let row = property(&shell_group, "Shadowed", &note);
+        status_group.set_visible(true);
+        let row = property(&status_group, "Shadowed", &note);
         row.add_prefix(
             &gtk::Image::builder()
                 .icon_name("dialog-warning-symbolic")
@@ -463,7 +465,14 @@ pub fn present(
     let toasts = toasts.clone();
     glib::spawn_future_local(async move {
         if let Ok(Some(info)) = gio::spawn_blocking(move || extensions::shell_info(&ext)).await {
-            shell_rows(&shell_group, &toasts, &ext2, compatible, &info);
+            shell_rows(
+                &status_group,
+                &shell_group,
+                &toasts,
+                &ext2,
+                compatible,
+                &info,
+            );
         }
     });
     dialog.present(Some(window));
@@ -505,6 +514,7 @@ fn set_toggle(button: &gtk::Button, enabled: bool) {
 /// The Shell's state of the extension, with a button to switch it on or off where it supports
 /// the running Shell (and the Shell lets it be changed).
 fn shell_rows(
+    status_group: &adw::PreferencesGroup,
     group: &adw::PreferencesGroup,
     toasts: &adw::ToastOverlay,
     ext: &Extension,
@@ -512,7 +522,8 @@ fn shell_rows(
     info: &ShellInfo,
 ) {
     let uuid = ext.uuid.as_str();
-    let row = property(group, "Status", "");
+    status_group.set_visible(true);
+    let row = property(status_group, "Status", "");
     let icon = gtk::Image::new();
     row.add_prefix(&icon);
     set_status(&row, &icon, info);
@@ -562,7 +573,7 @@ fn shell_rows(
         row.add_suffix(&button);
     }
     if !info.error.is_empty() {
-        let row = property(group, "Error", &info.error);
+        let row = property(status_group, "Error", &info.error);
         row.add_prefix(
             &gtk::Image::builder()
                 .icon_name("dialog-error-symbolic")

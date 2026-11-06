@@ -11,7 +11,11 @@ Adw.Dialog dialog {
       Adw.HeaderBar {}
 
       content: Adw.PreferencesPage {
-        Adw.PreferencesGroup info_group {}
+        Adw.PreferencesGroup status_group {
+        visible: false;
+      }
+
+      Adw.PreferencesGroup info_group {}
 
         Adw.PreferencesGroup shell_group {
           title: "GNOME Shell";
