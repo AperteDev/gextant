@@ -249,8 +249,8 @@ pub(crate) fn api_get(mut url: String, header: (&str, String)) -> Result<Option<
     Err(Error::Other("Too many redirects".into()))
 }
 
-/// ponytail: GitHub lists tags by name, not by date; a repo whose newest tag sorts low is
-/// misread; pick by version number if it shows up.
+/// The API's answer: the latest release; a 404 is none (or no such repository). Only releases
+/// count: a bare tag is a snapshot, not something the author published.
 fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Release>, Error> {
     let path = &repo.path;
     let api = |what: &str| {
@@ -263,16 +263,11 @@ fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Rel
         let tag = r["tag_name"].as_str().unwrap_or_default().to_owned();
         return Ok(Some(Release { tag, ships }));
     }
-    let tags = api("tags?per_page=1")?;
-    let tag = tags.as_ref().and_then(|t| t[0]["name"].as_str());
-    Ok(tag.map(|tag| Release {
-        tag: tag.to_owned(),
-        ships: false,
-    }))
+    Ok(None)
 }
 
 /// `/releases/latest` redirects to the release's page, `/releases/tag/<tag>` (to
-/// `/releases` when there is none: then the tags feed names the newest tag).
+/// `/releases` when there is none: then there is nothing to check).
 fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error> {
     let base = format!("https://github.com/{}", repo.path);
     let r = AGENT.head(format!("{base}/releases/latest")).call()?;
@@ -287,9 +282,7 @@ fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error>
         s => return Err(Error::Other(format!("The server answered HTTP {s}"))),
     };
     let Some(tag) = tag else {
-        let feed = read(AGENT.get(format!("{base}/tags.atom")).call()?)?;
-        let tag = feed.as_deref().and_then(first_tag);
-        return Ok(tag.map(|tag| Release { tag, ships: false }));
+        return Ok(None);
     };
     let ships = match uuid {
         // The assets are listed on a page of their own.
@@ -306,13 +299,6 @@ fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error>
         None => false,
     };
     Ok(Some(Release { tag, ships }))
-}
-
-/// The newest tag of a repository's `tags.atom`: the title of its first entry.
-pub(crate) fn first_tag(feed: &str) -> Option<String> {
-    let entry = &feed[feed.find("<entry>")?..];
-    let title = &entry[entry.find("<title>")? + 7..];
-    Some(title[..title.find("</title>")?].trim().to_owned())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -411,7 +397,7 @@ impl Source {
 /// What the upstream (a repository) has: the part worth keeping between runs.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Upstream {
-    /// The tag of the latest release (or of the newest tag).
+    /// The tag of the latest release.
     Tag {
         tag: String,
         source: Source,
@@ -608,13 +594,6 @@ mod tests {
         assert_eq!(d("extensions.gnome.org-v110", None, Some(110)), "110");
         assert_eq!(d("2.2.0+10", None, Some(9)), "10");
         assert_eq!(d("v1.2.0", None, Some(9)), "1.2.0");
-    }
-
-    #[test]
-    fn first_tag_of_a_feed() {
-        let feed = "<feed><title>Tags</title><entry><id>x</id><title>v1.2</title></entry><entry><title>v1.1</title></entry></feed>";
-        assert_eq!(first_tag(feed).as_deref(), Some("v1.2"));
-        assert_eq!(first_tag("<feed><title>Tags</title></feed>"), None);
     }
 
     #[test]

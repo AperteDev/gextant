@@ -165,7 +165,7 @@ pub fn view(checks: &Checks, version_name: Option<&str>, counter: Option<u64>) -
         },
         Ok(Upstream::NoRelease(source)) => missing(
             *source,
-            "The repository has no releases or tags, so there is no version to compare.",
+            "The repository has no releases, so there is no version to compare.",
         ),
         Ok(Upstream::NoRepo(Some(_))) => missing(
             Source::Web,

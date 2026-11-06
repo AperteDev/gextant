@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Only a repository's published releases are checked: a tag without a release is ignored, so
+  a repository that only has tags shows as having no releases
 - An update stands out in the list: what is up to date is shown quietly (no longer green), a
   newer version is a blue pill, its extension has an update icon and moves to the top, and the
   title says how many updates there are

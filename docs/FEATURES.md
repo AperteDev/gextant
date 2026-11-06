@@ -51,6 +51,7 @@ What Gextant can do, in short. The details of each release are in the
 
 **Versions**
 
+- Only releases count; a tag nobody released is ignored.
 - Compared as the repository tags them (`v2.5.0`), or against the number the portal gave an
   extension where the tag carries it (`v66`, `extensions.gnome.org-v110`, `2.2.0+10`).
 

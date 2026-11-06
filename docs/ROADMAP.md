@@ -20,8 +20,8 @@ first and is counted in the title; grey: the two cannot be compared. The
 installed version is shown by itself, with the theme's computer icon
 (`computer-symbolic`, as Nautilus's My Computer extension uses), only where no chip has it. A
 long version is cut to 12 characters; the whole one is in the tooltip. Where a source has no
-version to show, its chip is its icon and a yellow `?`, and the tooltip says why: no releases or
-tags in the repository, a rate limit (naming the host), a failed check, no repository behind the
+version to show, its chip is its icon and a yellow `?`, and the tooltip says why: no releases in
+the repository, a rate limit (naming the host), a failed check, no repository behind the
 extension's website, or none named at all (the generic globe: the theme's `globe-symbolic`, with
 a bundled one for themes that have none, Adwaita). A portal that does not know the extension
 shows nothing: not every extension is on it. What is left on a row:
@@ -76,15 +76,17 @@ GitHub and GitLab in 0.1; Codeberg and Forgejo are under [Later](#later).
 
 ### What to install
 
-Checking reads GitHub's `releases/latest` (else the first tag). To install, the release's asset
+Checking reads GitHub's `releases/latest`; only published releases count (a bare tag is a
+snapshot, often a forgotten one, and is ignored). To install, the release's asset
 named `*.shell-extension.zip` is what gets installed. Without such an asset, the release's
 source archive if its `metadata.json` is at the root (or in a single subfolder). Anything else
 (a repo that needs `make`, meson or npm to produce the extension) shows "no release to
 install"; Gextant does not run build scripts (see [Ruled out](#ruled-out)).
 
 Checking spends no API quota: it reads the forge's pages (GitHub: `/releases/latest` redirects
-to the tag, `tags.atom` for repos that only tag, the assets page for a guessed repository;
-GitLab: `/-/releases/permalink/latest` and `/-/tags?format=atom`). The API is the fallback, and
+to the tag, the assets page for a guessed repository; GitLab:
+`/-/releases/permalink/latest`, and the tags feed only to tell a project without releases from
+one that does not exist). The API is the fallback, and
 only with an access token (Preferences, each kept in the keyring): when the pages are limited or
 do not know the repository (a private one). A GitHub token raises its limit from 60 to 5,000 an
 hour. A GitLab token (scope `read_api`) is for gitlab.com only, never sent to another GitLab
@@ -214,7 +216,7 @@ Roughly in this order, each with its own plan when it comes:
   reload (`Alt+F2`, `r`); not worth a code path for now.
 - **GitHub's rate limit** on github.com's pages is not documented; the banner is there for when
   it is hit. Results are kept for hours, which already spares most requests.
-- **The pages' markup** (the assets page, `tags.atom`) is not an API: it can change. The API
+- **The pages' markup** (the assets page) is not an API: it can change. The API
   fallback does not depend on them.
 
 ## Ruled out

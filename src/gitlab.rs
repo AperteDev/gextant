@@ -2,7 +2,7 @@
 //! as on GitHub; the API only to see the files of a release, when asked, and as the fallback
 //! with a token (gitlab.com's only) when the pages are limited or do not know the project.
 
-use crate::upstream::{AGENT, Error, Release, Repo, api_get, first_tag, host_of, read, ships};
+use crate::upstream::{AGENT, Error, Release, Repo, api_get, host_of, read, ships};
 use serde_json::Value;
 use ureq::ResponseExt;
 
@@ -37,7 +37,7 @@ fn ships_in(release: &Value, uuid: &str) -> bool {
     )
 }
 
-/// The API's answer: the newest release, else the newest tag.
+/// The API's answer: the newest release (only releases count, not bare tags).
 fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Release>, Error> {
     let base = format!(
         "https://{}/api/v4/projects/{}",
@@ -55,16 +55,11 @@ fn latest_api(repo: &Repo, token: &str, uuid: Option<&str>) -> Result<Option<Rel
         let ships = uuid.is_some_and(|u| ships_in(&release, u));
         return Ok(Some(Release { tag, ships }));
     }
-    let tags = api("repository/tags?per_page=1&order_by=updated")?;
-    let tag = tags.as_ref().and_then(|t| t[0]["name"].as_str());
-    Ok(tag.map(|tag| Release {
-        tag: tag.to_owned(),
-        ships: false,
-    }))
+    Ok(None)
 }
 
 /// `/-/releases/permalink/latest` redirects to the release's page, `/-/releases/<tag>`; without
-/// releases it is a 404, and the tags feed names the newest tag (a 404 there: no such project).
+/// releases it is a 404: none to check, if the project exists (its tags feed tells).
 fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error> {
     let (host, path) = (&repo.host, &repo.path);
     let base = format!("https://{host}/{path}");
@@ -82,9 +77,8 @@ fn latest_web(repo: &Repo, uuid: Option<&str>) -> Result<Option<Release>, Error>
         s => return Err(Error::Other(format!("The server answered HTTP {s}"))),
     };
     let Some(tag) = tag else {
-        let feed = read(AGENT.get(format!("{base}/-/tags?format=atom")).call()?)?;
-        let tag = feed.ok_or(Error::Missing)?;
-        return Ok(first_tag(&tag).map(|tag| Release { tag, ships: false }));
+        read(AGENT.get(format!("{base}/-/tags?format=atom")).call()?)?.ok_or(Error::Missing)?;
+        return Ok(None);
     };
     let ships = match uuid {
         // `tag` is as the redirect gave it: already percent-encoded.
