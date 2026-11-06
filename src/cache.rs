@@ -31,6 +31,9 @@ struct Entry {
     /// When it was found (unix time), and for which `url`: another one asks again.
     at: u64,
     url: String,
+    /// With prereleases or without: the other setting asks again.
+    #[serde(default)]
+    pre: bool,
     found: Found,
 }
 
@@ -62,19 +65,20 @@ impl Cache {
         }
     }
 
-    pub fn get(&self, uuid: &str, url: Option<&str>, now: u64) -> Option<Found> {
+    pub fn get(&self, uuid: &str, url: Option<&str>, pre: bool, now: u64) -> Option<Found> {
         let e = self.0.get(uuid)?;
         let fresh = now.saturating_sub(e.at) < lifetime(&e.found);
-        (fresh && e.url == url.unwrap_or_default()).then(|| e.found.clone())
+        (fresh && e.pre == pre && e.url == url.unwrap_or_default()).then(|| e.found.clone())
     }
 
-    pub fn put(&mut self, uuid: &str, url: Option<&str>, found: Found, now: u64) {
+    pub fn put(&mut self, uuid: &str, url: Option<&str>, pre: bool, found: Found, now: u64) {
         let url = url.unwrap_or_default().to_owned();
         self.0.insert(
             uuid.to_owned(),
             Entry {
                 at: now,
                 url,
+                pre,
                 found,
             },
         );
@@ -110,29 +114,39 @@ mod tests {
     fn results_expire_and_follow_the_url() {
         let mut c = Cache::default();
         let (u, url) = ("a@b", Some("https://github.com/o/r"));
-        c.put(u, url, tag("v1"), 1000);
-        assert_eq!(c.get(u, url, 1000 + 6 * HOUR - 1), Some(tag("v1")));
-        assert_eq!(c.get(u, url, 1000 + 6 * HOUR), None);
-        assert_eq!(c.get(u, Some("https://github.com/o/other"), 1000), None);
-        c.put(u, None, found(Upstream::NoRepo(None)), 1000);
+        c.put(u, url, false, tag("v1"), 1000);
+        assert_eq!(c.get(u, url, false, 1000 + 6 * HOUR - 1), Some(tag("v1")));
+        assert_eq!(c.get(u, url, false, 1000 + 6 * HOUR), None);
+        assert_eq!(c.get(u, url, true, 1000), None); // asked with prereleases: ask again
         assert_eq!(
-            c.get(u, None, 1000 + 23 * HOUR),
+            c.get(u, Some("https://github.com/o/other"), false, 1000),
+            None
+        );
+        c.put(u, None, false, found(Upstream::NoRepo(None)), 1000);
+        assert_eq!(
+            c.get(u, None, false, 1000 + 23 * HOUR),
             Some(found(Upstream::NoRepo(None)))
         );
-        assert_eq!(c.get(u, None, 1000 + 24 * HOUR), None);
+        assert_eq!(c.get(u, None, false, 1000 + 24 * HOUR), None);
     }
 
     #[test]
     fn survives_a_round_trip_and_forgets_removed_extensions() {
         let mut c = Cache::default();
-        c.put("a@b", None, found(Upstream::NoRelease(Source::GitLab)), 5);
-        c.put("c@d", None, tag("2"), 5);
+        c.put(
+            "a@b",
+            None,
+            false,
+            found(Upstream::NoRelease(Source::GitLab)),
+            5,
+        );
+        c.put("c@d", None, false, tag("2"), 5);
         c.retain(&["a@b"]);
         let back: Cache = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
         assert_eq!(
-            back.get("a@b", None, 6),
+            back.get("a@b", None, false, 6),
             Some(found(Upstream::NoRelease(Source::GitLab)))
         );
-        assert_eq!(back.get("c@d", None, 6), None);
+        assert_eq!(back.get("c@d", None, false, 6), None);
     }
 }

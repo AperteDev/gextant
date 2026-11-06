@@ -183,15 +183,54 @@ fn failure(status: u16, limited: bool, body: &str, host: String) -> Error {
 /// only when they fail is the API asked, if there is a `token`: when the pages are limited, or
 /// do not know the repository (a private one). GitLab: see `gitlab`. `uuid` asks whether the
 /// release ships that extension.
-pub fn latest(repo: &Repo, tokens: &Tokens, uuid: Option<&str>) -> Result<Option<Release>, Error> {
+pub fn latest(
+    repo: &Repo,
+    tokens: &Tokens,
+    uuid: Option<&str>,
+    prereleases: bool,
+) -> Result<Option<Release>, Error> {
     let token = tokens.for_host(&repo.host);
     if repo.host != "github.com" {
         return crate::gitlab::latest(repo, token, uuid);
+    }
+    if prereleases {
+        return latest_with_pre(repo, token, uuid);
     }
     match (latest_web(repo, uuid), token) {
         (Err(Error::RateLimited(_) | Error::Missing), Some(token)) => latest_api(repo, token, uuid),
         (r, _) => r,
     }
+}
+
+/// The newest release, a prerelease too: only the API lists those (the pages' latest release
+/// leaves them out), so this one costs quota, less with a token. A draft is not one.
+fn latest_with_pre(
+    repo: &Repo,
+    token: Option<&str>,
+    uuid: Option<&str>,
+) -> Result<Option<Release>, Error> {
+    let url = format!(
+        "https://api.github.com/repos/{}/releases?per_page=10",
+        repo.path
+    );
+    let list = match token {
+        Some(token) => api_get(url, ("Authorization", format!("Bearer {token}")))?,
+        None => read(AGENT.get(url).header("Accept", "application/json").call()?)?
+            .and_then(|t| serde_json::from_str(&t).ok()),
+    };
+    let list = list.ok_or(Error::Missing)?;
+    let release = list
+        .as_array()
+        .into_iter()
+        .flatten()
+        .find(|r| r["draft"] != true);
+    Ok(release.map(|r| {
+        let assets = r["assets"].as_array().into_iter().flatten();
+        Release {
+            tag: r["tag_name"].as_str().unwrap_or_default().to_owned(),
+            ships: uuid.is_some_and(|u| ships(assets.filter_map(|a| a["name"].as_str()), u)),
+        }
+    }))
 }
 
 /// Is one of the `files` a zip named after the extension: its UUID, or what is before the `@`
@@ -416,7 +455,12 @@ pub struct Failure {
 }
 
 /// Look for the upstream of extension `uuid`, named by its metadata `url`, and its latest release.
-pub fn find(uuid: &str, url: Option<&str>, tokens: &Tokens) -> Result<Upstream, Failure> {
+pub fn find(
+    uuid: &str,
+    url: Option<&str>,
+    tokens: &Tokens,
+    prereleases: bool,
+) -> Result<Upstream, Failure> {
     let Some(url) = url else {
         return Ok(Upstream::NoRepo(None));
     };
@@ -428,7 +472,7 @@ pub fn find(uuid: &str, url: Option<&str>, tokens: &Tokens) -> Result<Upstream, 
     };
     let mut result = Ok(Upstream::NoRepo(Some(Source::Web)));
     for (repo, guessed) in candidates {
-        match latest(&repo, tokens, guessed.then_some(uuid)) {
+        match latest(&repo, tokens, guessed.then_some(uuid), prereleases) {
             Err(error @ Error::RateLimited(_)) => {
                 return Err(Failure {
                     error,

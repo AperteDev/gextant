@@ -4,6 +4,7 @@
 use crate::cache::{self, Cache};
 use crate::check::{self, Checks, Chip, Found, View, abbreviate};
 use crate::extensions::{self, Extension};
+use crate::settings::{self, Interval};
 use crate::token::Tokens;
 use crate::upstream::{self, Version};
 use crate::{details, gitlab, preferences};
@@ -169,6 +170,8 @@ struct Checker {
     /// The user's extensions, where the ones with an update go first, and the count in the title.
     group: adw::PreferencesGroup,
     title: adw::WindowTitle,
+    /// The timer of the checks while running, as Preferences has it.
+    timer: RefCell<Option<glib::SourceId>>,
 }
 
 pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
@@ -282,6 +285,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
         shell,
         group: groups[0].1.clone(),
         title: window_title,
+        timer: RefCell::new(None),
     });
     button.connect_clicked({
         let checker = checker.clone();
@@ -292,12 +296,19 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
             let checker = checker.clone();
             move |window: &adw::ApplicationWindow, _, _| {
                 let checker = checker.clone();
-                preferences::present(window, move || check_all(&checker, false));
+                preferences::present(window, move || {
+                    schedule(&checker);
+                    check_all(&checker, false);
+                });
             }
         })
         .build();
     window.add_action_entries([preferences]);
-    check_all(&checker, false);
+    // On start, unless the checks are manual.
+    if settings::load().interval != Interval::Manually {
+        check_all(&checker, false);
+    }
+    schedule(&checker);
     window
 }
 
@@ -340,6 +351,24 @@ fn version_label(e: &Extension) -> gtk::Label {
         .build()
 }
 
+/// (Re)start the timer of the repeated checks, as set in Preferences; none for "on start only".
+fn schedule(checker: &Rc<Checker>) {
+    if let Some(old) = checker.timer.borrow_mut().take() {
+        old.remove();
+    }
+    if let Some(seconds) = settings::load().interval.seconds() {
+        let checker = checker.clone();
+        let id = glib::timeout_add_seconds_local(seconds, {
+            let checker = checker.clone();
+            move || {
+                check_all(&checker, true);
+                glib::ControlFlow::Continue
+            }
+        });
+        *checker.timer.borrow_mut() = Some(id);
+    }
+}
+
 /// Check every user extension on its own thread; the button waits for the last. What was found
 /// less than a few hours ago is not looked for again, unless `force` (the refresh button).
 fn check_all(checker: &Rc<Checker>, force: bool) {
@@ -353,9 +382,10 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
     checker.token_banner.set_revealed(false);
     checker.refused.borrow_mut().clear();
     let now = cache::now();
+    let pre = settings::load().prereleases;
     let cached: Vec<Option<Found>> = {
         let cache = checker.cache.borrow();
-        let get = |r: &Checked| cache.get(&r.uuid, r.url.as_deref(), now);
+        let get = |r: &Checked| cache.get(&r.uuid, r.url.as_deref(), pre, now);
         checker
             .rows
             .iter()
@@ -390,7 +420,7 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
             let (checks, fresh) = gio::spawn_blocking(move || match cached {
                 Some(found) => (Checks::from_found(found), false),
                 None => (
-                    check::run(&u, url2.as_deref(), &tokens, shell.as_deref()),
+                    check::run(&u, url2.as_deref(), &tokens, shell.as_deref(), pre),
                     true,
                 ),
             })
@@ -415,7 +445,7 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
                 checker
                     .cache
                     .borrow_mut()
-                    .put(&uuid, url.as_deref(), found, now);
+                    .put(&uuid, url.as_deref(), pre, found, now);
             }
             if let Some(host) = checks.rate_limited() {
                 show_rate_limit(&checker.banner, host, &tokens_now);

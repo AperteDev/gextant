@@ -87,7 +87,7 @@ Checking spends no API quota: it reads the forge's pages (GitHub: `/releases/lat
 to the tag, the assets page for a guessed repository; GitLab:
 `/-/releases/permalink/latest`, and the tags feed only to tell a project without releases from
 one that does not exist). The API is the fallback, and
-only with an access token (Preferences, each kept in the keyring): when the pages are limited or
+only with an access token (Preferences, Connections, each kept in the keyring): when the pages are limited or
 do not know the repository (a private one). A GitHub token raises its limit from 60 to 5,000 an
 hour. A GitLab token (scope `read_api`) is for gitlab.com only, never sent to another GitLab
 host; gitlab.com's limit on its pages is per IP and `unauthenticated_traffic_per_ip`, seen

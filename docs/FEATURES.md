@@ -55,11 +55,18 @@ What Gextant can do, in short. The details of each release are in the
 - Compared as the repository tags them (`v2.5.0`), or against the number the portal gave an
   extension where the tag carries it (`v66`, `extensions.gnome.org-v110`, `2.2.0+10`).
 
+**Preferences**
+
+- General: how often to check for updates (manually, on start only, which is the default, every
+  hour, every 6 hours, every day) and whether to check prereleases too (off by default; GitHub
+  only, and each check then uses the API, which a token makes roomier).
+- Connections: the access tokens.
+
 **Rate limits and tokens**
 
 - Repositories are read from the forges' pages, which cost no API quota.
 - What was found is kept for a few hours, so starting the app does not ask everything again.
-- Optional GitHub and GitLab access tokens in Preferences, kept in your keyring, with links that
+- Optional GitHub and GitLab access tokens in Preferences (Connections), kept in your keyring, with links that
   fill in the token's name and permissions; the GitLab one only ever goes to gitlab.com.
 - Banners when a forge's limit is used up, and when a token has expired or was revoked.
 

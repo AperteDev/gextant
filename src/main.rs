@@ -9,6 +9,7 @@ mod extensions;
 mod gitlab;
 mod install;
 mod preferences;
+mod settings;
 mod token;
 mod upstream;
 mod window;

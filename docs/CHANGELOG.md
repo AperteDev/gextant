@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Preferences has two tabs: General, with how often to check for updates (manually, on start
+  only by default, every hour, every 6 hours, every day) and a Prereleases switch (off by
+  default; GitHub only, through the API); and Connections, with the access tokens
 - A system extension whose UUID is also in your folder (a package linked there, say) stays in
   the list with a warning icon and, in its details, a note that your copy is the one in use
 - A warning before an update replaces a link in your extensions folder with a copy of its own

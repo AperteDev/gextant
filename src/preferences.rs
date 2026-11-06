@@ -1,9 +1,11 @@
-//! Preferences: the access tokens, GitHub's and GitLab's.
+//! Preferences: General (how often to check, prereleases) and Connections (the access tokens,
+//! GitHub's and GitLab's).
 
+use crate::settings::{self, Interval, Settings};
 use crate::token;
 use adw::prelude::*;
 
-/// Show the dialog over `window`; `saved` runs after a token was kept.
+/// Show the dialog over `window`; `saved` runs after a token or a setting was kept.
 pub fn present(window: &adw::ApplicationWindow, saved: impl Fn() + Clone + 'static) {
     let ui = gtk::Builder::from_resource("/dev/aperte/Gextant/preferences.ui");
     let dialog: adw::PreferencesDialog = ui.object("dialog").expect("dialog in preferences.blp");
@@ -20,5 +22,47 @@ pub fn present(window: &adw::ApplicationWindow, saved: impl Fn() + Clone + 'stat
             }
         });
     }
+    let interval: adw::ComboRow = ui.object("interval_row").expect("row in preferences.blp");
+    let prereleases: adw::SwitchRow = ui.object("prerelease_row").expect("row in preferences.blp");
+    let labels: Vec<&str> = Interval::ALL.iter().map(|i| i.label()).collect();
+    interval.set_model(Some(&gtk::StringList::new(&labels)));
+    let now = settings::load();
+    interval.set_selected(
+        Interval::ALL
+            .iter()
+            .position(|i| *i == now.interval)
+            .unwrap_or(1) as u32,
+    );
+    prereleases.set_active(now.prereleases);
+    // Both rows write the whole of the settings, from what the two show.
+    let keep = {
+        let (interval, prereleases, dialog, saved) = (
+            interval.clone(),
+            prereleases.clone(),
+            dialog.clone(),
+            saved.clone(),
+        );
+        move || {
+            let interval = Interval::ALL
+                .get(interval.selected() as usize)
+                .copied()
+                .unwrap_or_default();
+            let new = Settings {
+                interval,
+                prereleases: prereleases.is_active(),
+            };
+            match settings::save(&new) {
+                Ok(()) => saved(),
+                Err(e) => dialog.add_toast(adw::Toast::new(&format!(
+                    "Could not keep the settings: {e}"
+                ))),
+            }
+        }
+    };
+    interval.connect_selected_notify({
+        let keep = keep.clone();
+        move |_| keep()
+    });
+    prereleases.connect_active_notify(move |_| keep());
     dialog.present(Some(window));
 }

@@ -55,13 +55,19 @@ impl Checks {
 
 /// Ask both, at once: the upstream named by the metadata `url`, and EGO (for GNOME Shell `shell`,
 /// if known).
-pub fn run(uuid: &str, url: Option<&str>, tokens: &Tokens, shell: Option<&str>) -> Checks {
+pub fn run(
+    uuid: &str,
+    url: Option<&str>,
+    tokens: &Tokens,
+    shell: Option<&str>,
+    prereleases: bool,
+) -> Checks {
     std::thread::scope(|s| {
         let ego = s.spawn(|| match shell {
             Some(shell) => ego::latest(uuid, shell),
             None => Ok(None),
         });
-        let upstream = upstream::find(uuid, url, tokens);
+        let upstream = upstream::find(uuid, url, tokens, prereleases);
         let ego = ego
             .join()
             .unwrap_or_else(|_| Err(Error::Other("The check crashed".into())));
