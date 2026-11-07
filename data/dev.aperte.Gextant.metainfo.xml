@@ -24,7 +24,7 @@
   <launchable type="desktop-id">dev.aperte.Gextant.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/AperteDev/gextant/v0.1.0/docs/screenshots/extensions.png</image>
+      <image>https://raw.githubusercontent.com/AperteDev/gextant/v0.2.0/docs/screenshots/extensions.png</image>
       <caption>The installed extensions, each with the newest version found for it</caption>
     </screenshot>
   </screenshots>
@@ -44,6 +44,28 @@
     <control>touch</control>
   </supports>
   <releases>
+    <release version="0.2.0" date="2026-11-07">
+      <url type="details">https://github.com/AperteDev/gextant/releases/tag/v0.2.0</url>
+      <description translate="no">
+        <p>Changed</p>
+        <ul>
+          <li>Only a repository's published releases are checked: a tag without a release is ignored, so a repository that only has tags shows as having no releases</li>
+          <li>An update stands out in the list: what is up to date is shown quietly (no longer green), a newer version is a blue pill, its extension has an update icon and moves to the top, and the title says how many updates there are</li>
+        </ul>
+        <p>Added</p>
+        <ul>
+          <li>Checks without the window: "At login and on start" checks once at login and notifies; "Every hour", "6 hours" and "day" keep Gextant running in the background (also after its window is closed) and check on a timer, notifying about new updates. Gextant adds the autostart entry itself while one of these is chosen</li>
+          <li>Preferences: Update Notifications (on by default, shown where checks repeat) and Dock Counter (on by default), the number of updates on Gextant's icon in Ubuntu Dock and Dash to Dock while Gextant runs</li>
+          <li>Preferences has two tabs: General, with how often to check for updates (manually, on start only by default, every hour, every 6 hours, every day) and a Prereleases switch (off by default; GitHub only, through the API); and Connections, with the access tokens</li>
+          <li>A system extension whose UUID is also in your folder (a package linked there, say) stays in the list with a warning icon and, in its details, a note that your copy is the one in use</li>
+          <li>A warning before an update replaces a link in your extensions folder with a copy of its own</li>
+          <li>Update buttons in an extension's details, next to each source (GitHub, GitLab, extensions.gnome.org) that has a newer version: the download is checked (the same extension, for the running Shell, no path out of its folder), put in place of the installed one, which is kept as a backup, and the window says to log out to apply it</li>
+          <li>An RPM for Fedora on COPR (<code>selfref/gextant</code>), built with each release</li>
+          <li>A warning icon on an extension that does not support the running GNOME Shell, its tooltip naming the versions it does</li>
+          <li>A details window, opened by clicking an extension: its description (one line, expandable, with basic Markdown shown), UUID, version, folder, the Shell versions it supports, the Shell's status for it (enabled, disabled, error, out of date) with a button to enable or disable it where it supports the running Shell, a button to open its settings, its website, what the checks found, and the rest of its <code>metadata.json</code>; its buttons (copy the UUID, open the folder or the settings, enable or disable, open the website) answer with a toast</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-11-05">
       <url type="details">https://github.com/AperteDev/gextant/releases/tag/v0.1.0</url>
       <description translate="no">
