@@ -15,13 +15,23 @@ Adw.PreferencesDialog dialog {
 
       Adw.ComboRow interval_row {
         title: "Check for Updates";
-        subtitle: "How often Gextant looks for new versions by itself. The refresh button always works.";
+        subtitle: "How often Gextant looks for new versions by itself. At login and every hour, 6 hours or day it works without a window, running in the background; the refresh button always works.";
         model: StringList {};
+      }
+
+      Adw.SwitchRow notification_row {
+        title: "Update Notifications";
+        subtitle: "Notify when a check in the background finds new updates.";
       }
 
       Adw.SwitchRow prerelease_row {
         title: "Prereleases";
         subtitle: "Also check prerelease versions. GitHub only; each check then uses the API, which a token in Connections makes roomier.";
+      }
+
+      Adw.SwitchRow dock_row {
+        title: "Dock Counter";
+        subtitle: "Show the number of updates on Gextant's icon in Ubuntu Dock and Dash to Dock, while Gextant runs.";
       }
     }
   }

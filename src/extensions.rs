@@ -172,7 +172,7 @@ fn user_data_dir() -> PathBuf {
         .map_or_else(|| glib::home_dir().join(".local/share"), PathBuf::from)
 }
 
-fn in_flatpak() -> bool {
+pub fn in_flatpak() -> bool {
     Path::new("/.flatpak-info").exists()
 }
 

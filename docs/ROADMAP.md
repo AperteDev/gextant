@@ -128,7 +128,7 @@ in the Flatpak, whose own data folder is another disk). Not yet: **Update** on t
 **Update all**, the mode, `state.json`, and the zip check for a repository the user sets.
 
 **Update** as an extension's mode does the same by itself, when Gextant checks: on start and
-every few hours while it runs. (A background check without the window is [Later](#later).) It
+every few hours while it runs, with or without the window. It
 installs only what passes the checks above, and tells what it did.
 
 ### Install from a link
@@ -165,9 +165,8 @@ Roughly in this order, each with its own plan when it comes:
   details window itself is built: metadata, Shell status, source and check results).
 - **More forges**: Codeberg and Forgejo, with the same checks; GitLab on a host not named
   `gitlab.…`; later a plain git URL.
-- **Background checks**: a check without the window and a notification, for extensions in
-  Check or Update mode (a user timer or the Background portal; to be planned together with
-  autostart).
+- **Background checks in the Flatpak**: built for the normal install (an autostart entry,
+  `gextant --background`); a Flatpak cannot write that entry, so it needs the Background portal.
 - **Force compatibility**: for an extension flagged as not supporting the running Shell, a way
   to add the Shell's version to its `shell-version` in `metadata.json`. Often that is all it
   takes, but not always (the Shell's API changes between versions), so it is to be investigated:

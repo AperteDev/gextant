@@ -9,6 +9,7 @@ mod extensions;
 mod gitlab;
 mod install;
 mod preferences;
+mod service;
 mod settings;
 mod token;
 mod upstream;
@@ -31,7 +32,18 @@ pub fn app_id() -> String {
 
 fn main() -> glib::ExitCode {
     gio::resources_register_include!("gextant.gresource").expect("resources");
-    let app = adw::Application::builder().application_id(app_id()).build();
+    let app = adw::Application::builder()
+        .application_id(app_id())
+        .flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE)
+        .build();
+    app.add_main_option(
+        "background",
+        glib::Char::from(b'b'),
+        glib::OptionFlags::NONE,
+        glib::OptionArg::None,
+        "Check for updates without a window, as at login",
+        None,
+    );
     app.connect_startup(|app| {
         let display = gdk::Display::default().expect("display");
         gtk::IconTheme::for_display(&display).add_resource_path("/dev/aperte/Gextant/icons");
@@ -58,10 +70,26 @@ fn main() -> glib::ExitCode {
                 }
             })
             .build();
-        app.add_action_entries([quit, about]);
+        // What a notification opens.
+        let show = gio::ActionEntry::builder("show")
+            .activate(|app: &adw::Application, _, _| app.activate())
+            .build();
+        app.add_action_entries([quit, about, show]);
         app.set_accels_for_action("app.quit", &["<Control>q"]);
         app.set_accels_for_action("win.preferences", &["<Control>comma"]);
     });
-    app.connect_activate(|app| window::build(app).present());
+    app.connect_command_line(|app, cmd| {
+        service::sync(app);
+        if cmd.options_dict().contains("background") {
+            service::background(app);
+        } else {
+            app.activate();
+        }
+        glib::ExitCode::SUCCESS
+    });
+    app.connect_activate(|app| match app.active_window() {
+        Some(window) => window.present(),
+        None => window::build(app).present(),
+    });
     app.run()
 }

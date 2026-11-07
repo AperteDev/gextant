@@ -1,4 +1,4 @@
-//! Preferences: General (how often to check, prereleases) and Connections (the access tokens,
+//! Preferences: General (how often to check, prereleases, notifications, the dock counter) and Connections (the access tokens,
 //! GitHub's and GitLab's).
 
 use crate::settings::{self, Interval, Settings};
@@ -24,6 +24,10 @@ pub fn present(window: &adw::ApplicationWindow, saved: impl Fn() + Clone + 'stat
     }
     let interval: adw::ComboRow = ui.object("interval_row").expect("row in preferences.blp");
     let prereleases: adw::SwitchRow = ui.object("prerelease_row").expect("row in preferences.blp");
+    let notifications: adw::SwitchRow = ui
+        .object("notification_row")
+        .expect("row in preferences.blp");
+    let dock: adw::SwitchRow = ui.object("dock_row").expect("row in preferences.blp");
     let labels: Vec<&str> = Interval::ALL.iter().map(|i| i.label()).collect();
     interval.set_model(Some(&gtk::StringList::new(&labels)));
     let now = settings::load();
@@ -34,11 +38,16 @@ pub fn present(window: &adw::ApplicationWindow, saved: impl Fn() + Clone + 'stat
             .unwrap_or(1) as u32,
     );
     prereleases.set_active(now.prereleases);
-    // Both rows write the whole of the settings, from what the two show.
+    notifications.set_active(now.notifications);
+    notifications.set_visible(now.interval.seconds().is_some());
+    dock.set_active(now.dock_counter);
+    // Every row writes the whole of the settings, from what they show.
     let keep = {
-        let (interval, prereleases, dialog, saved) = (
+        let (interval, prereleases, notifications, dock, dialog, saved) = (
             interval.clone(),
             prereleases.clone(),
+            notifications.clone(),
+            dock.clone(),
             dialog.clone(),
             saved.clone(),
         );
@@ -50,7 +59,10 @@ pub fn present(window: &adw::ApplicationWindow, saved: impl Fn() + Clone + 'stat
             let new = Settings {
                 interval,
                 prereleases: prereleases.is_active(),
+                notifications: notifications.is_active(),
+                dock_counter: dock.is_active(),
             };
+            notifications.set_visible(interval.seconds().is_some());
             match settings::save(&new) {
                 Ok(()) => saved(),
                 Err(e) => dialog.add_toast(adw::Toast::new(&format!(
@@ -63,6 +75,11 @@ pub fn present(window: &adw::ApplicationWindow, saved: impl Fn() + Clone + 'stat
         let keep = keep.clone();
         move |_| keep()
     });
-    prereleases.connect_active_notify(move |_| keep());
+    for row in [&prereleases, &notifications, &dock] {
+        row.connect_active_notify({
+            let keep = keep.clone();
+            move |_| keep()
+        });
+    }
     dialog.present(Some(window));
 }

@@ -7,7 +7,7 @@ use crate::extensions::{self, Extension};
 use crate::settings::{self, Interval};
 use crate::token::Tokens;
 use crate::upstream::{self, Version};
-use crate::{details, gitlab, preferences};
+use crate::{details, gitlab, preferences, service};
 use adw::prelude::*;
 use gtk::{gio, glib};
 use std::cell::{Cell, RefCell};
@@ -247,6 +247,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
                 );
                 on_updated = Rc::new(move || {
                     target.mark_updated();
+                    service::updated();
                     banner.set_revealed(true);
                     title.set_subtitle("");
                 });
@@ -289,16 +290,20 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
     });
     button.connect_clicked({
         let checker = checker.clone();
-        move |_| check_all(&checker, true)
+        move |_| check_all(&checker, true, false)
     });
     let preferences = gio::ActionEntry::builder("preferences")
         .activate({
             let checker = checker.clone();
             move |window: &adw::ApplicationWindow, _, _| {
                 let checker = checker.clone();
+                let app = window.application().and_downcast::<adw::Application>();
                 preferences::present(window, move || {
+                    if let Some(app) = &app {
+                        service::sync(app);
+                    }
                     schedule(&checker);
-                    check_all(&checker, false);
+                    check_all(&checker, false, false);
                 });
             }
         })
@@ -306,7 +311,7 @@ pub fn build(app: &adw::Application) -> adw::ApplicationWindow {
     window.add_action_entries([preferences]);
     // On start, unless the checks are manual.
     if settings::load().interval != Interval::Manually {
-        check_all(&checker, false);
+        check_all(&checker, false, false);
     }
     schedule(&checker);
     window
@@ -361,7 +366,7 @@ fn schedule(checker: &Rc<Checker>) {
         let id = glib::timeout_add_seconds_local(seconds, {
             let checker = checker.clone();
             move || {
-                check_all(&checker, true);
+                check_all(&checker, true, settings::load().notifications);
                 glib::ControlFlow::Continue
             }
         });
@@ -370,8 +375,9 @@ fn schedule(checker: &Rc<Checker>) {
 }
 
 /// Check every user extension on its own thread; the button waits for the last. What was found
-/// less than a few hours ago is not looked for again, unless `force` (the refresh button).
-fn check_all(checker: &Rc<Checker>, force: bool) {
+/// less than a few hours ago is not looked for again, unless `force` (the refresh button). New
+/// updates are notified if `notify` (the timer).
+fn check_all(checker: &Rc<Checker>, force: bool, notify: bool) {
     if checker.rows.is_empty() {
         return;
     }
@@ -459,12 +465,28 @@ fn check_all(checker: &Rc<Checker>, force: bool) {
             if pending.get() == 0 {
                 checker.button.set_sensitive(true);
                 show_updates(&checker);
+                service::report(&checker.updates(), notify);
                 let mut cache = checker.cache.borrow_mut();
                 let uuids: Vec<&str> = checker.rows.iter().map(|r| r.uuid.as_str()).collect();
                 cache.retain(&uuids);
                 cache.save();
             }
         });
+    }
+}
+
+impl Checker {
+    fn updates(&self) -> Vec<service::Update> {
+        (self.rows.iter())
+            .filter(|r| r.has_update())
+            .map(|r| service::Update {
+                uuid: r.uuid.clone(),
+                name: r.row.title().into(),
+                version: (r.view.borrow().as_ref())
+                    .and_then(|v| v.update().map(str::to_owned))
+                    .unwrap_or_default(),
+            })
+            .collect()
     }
 }
 

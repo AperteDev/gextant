@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Checks without the window: "At login and on start" checks once at login and notifies;
+  "Every hour", "6 hours" and "day" keep Gextant running in the background (also after its
+  window is closed) and check on a timer, notifying about new updates. Gextant adds the
+  autostart entry itself while one of these is chosen
+- Preferences: Update Notifications (on by default, shown where checks repeat) and Dock Counter
+  (on by default), the number of updates on Gextant's icon in Ubuntu Dock and Dash to Dock
+  while Gextant runs
 - Preferences has two tabs: General, with how often to check for updates (manually, on start
   only by default, every hour, every 6 hours, every day) and a Prereleases switch (off by
   default; GitHub only, through the API); and Connections, with the access tokens

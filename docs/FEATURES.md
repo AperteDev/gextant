@@ -57,8 +57,10 @@ What Gextant can do, in short. The details of each release are in the
 
 **Preferences**
 
-- General: how often to check for updates (manually, on start only, which is the default, every
-  hour, every 6 hours, every day) and whether to check prereleases too (off by default; GitHub
+- General: how often to check for updates (manually, on start only, which is the default, at
+  login, every hour, every 6 hours, every day; the last four also work without a window, in the
+  background, with a notification you can turn off), the number of updates on the icon in Ubuntu
+  Dock and Dash to Dock, and whether to check prereleases too (off by default; GitHub
   only, and each check then uses the API, which a token makes roomier).
 - Connections: the access tokens.
 
@@ -84,7 +86,7 @@ What Gextant can do, in short. The details of each release are in the
 - Set the repository of an extension where none was found; mark what is installed.
 - A switch for each extension in the list.
 - Forcing an extension that does not support your Shell to load anyway (to be investigated).
-- Checking in the background, with a notification; going back to the previous version.
+- Background checks in the Flatpak (through the Background portal); going back to the previous version.
 - Repositories that publish no releases, followed by their branch.
 - Codeberg and other forges.
 - Searching for extensions.

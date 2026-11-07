@@ -11,6 +11,7 @@ pub enum Interval {
     Manually,
     #[default]
     Start,
+    Login,
     Hour,
     SixHours,
     Day,
@@ -18,9 +19,10 @@ pub enum Interval {
 
 impl Interval {
     /// In the order of the selector in Preferences.
-    pub const ALL: [Interval; 5] = [
+    pub const ALL: [Interval; 6] = [
         Interval::Manually,
         Interval::Start,
+        Interval::Login,
         Interval::Hour,
         Interval::SixHours,
         Interval::Day,
@@ -30,16 +32,22 @@ impl Interval {
         match self {
             Interval::Manually => "Manually",
             Interval::Start => "On start only",
+            Interval::Login => "At login and on start",
             Interval::Hour => "Every hour",
             Interval::SixHours => "Every 6 hours",
             Interval::Day => "Every day",
         }
     }
 
+    /// Does it need Gextant to run without a window: a check at login, or repeated ones?
+    pub fn background(self) -> bool {
+        self == Interval::Login || self.seconds().is_some()
+    }
+
     /// Seconds between checks while running, if it checks again at all.
     pub fn seconds(self) -> Option<u32> {
         match self {
-            Interval::Manually | Interval::Start => None,
+            Interval::Manually | Interval::Start | Interval::Login => None,
             Interval::Hour => Some(3600),
             Interval::SixHours => Some(6 * 3600),
             Interval::Day => Some(24 * 3600),
@@ -47,12 +55,27 @@ impl Interval {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub interval: Interval,
     /// Also look at prereleases (GitHub only: GitLab has none).
     pub prereleases: bool,
+    /// A notification for new updates found by the repeated checks.
+    pub notifications: bool,
+    /// The number of updates on the icon in the dock.
+    pub dock_counter: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Settings {
+            interval: Interval::default(),
+            prereleases: false,
+            notifications: true,
+            dock_counter: true,
+        }
+    }
 }
 
 fn path() -> PathBuf {
@@ -83,6 +106,8 @@ mod tests {
     fn defaults_and_partial_files() {
         let d = Settings::default();
         assert_eq!((d.interval, d.prereleases), (Interval::Start, false));
+        assert!(d.notifications && d.dock_counter);
+        assert!(!Interval::Start.background() && Interval::Login.background());
         let s: Settings = serde_json::from_str(r#"{"prereleases":true}"#).unwrap();
         assert_eq!((s.interval, s.prereleases), (Interval::Start, true));
         let s: Settings = serde_json::from_str(r#"{"interval":"six-hours"}"#).unwrap();
